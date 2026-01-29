@@ -1,0 +1,8 @@
+{
+  "name": "Bali Spirit Festival Scheduler",
+  "description": "A high-performance scheduling web app for the Bali Spirit Festival, featuring color-coded categories, real-time updates, personal itineraries, and a comprehensive admin dashboard.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
