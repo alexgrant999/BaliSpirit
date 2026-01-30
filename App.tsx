@@ -5,6 +5,7 @@ import { EventCard } from './components/EventCard';
 import { EventModal } from './components/EventModal';
 import { PresenterModal } from './components/PresenterModal';
 import { AdminPanel } from './components/AdminPanel';
+import { AdminAuth } from './components/AdminAuth';
 import { PresentersView } from './components/PresentersView';
 import { VenuesView } from './components/VenuesView';
 import { Header } from './components/Header';
@@ -26,7 +27,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Critical Fix: Explicitly use React.Component to ensure proper type inference for props
+// Critical Fix: Use React.Component directly to ensure proper type inference for props
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null };
 
@@ -80,6 +81,7 @@ const AppContent: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isLocalAdmin, setIsLocalAdmin] = useState(false); // New state for local admin override
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -153,10 +155,22 @@ const AppContent: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       await syncUserFromSession(session);
       if (authLoading) setAuthLoading(false);
+      
+      // Critical Fix: Trigger data refresh when authentication state settles.
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        console.log(`Auth event: ${event}. Refreshing data connection...`);
+        refreshData();
+      }
+      
+      // Reset local admin on sign out
+      if (event === 'SIGNED_OUT') {
+        setIsLocalAdmin(false);
+        setIsAdminMode(false);
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, [syncUserFromSession, authLoading, addLog]);
+  }, [syncUserFromSession, authLoading, addLog, refreshData]);
 
   const handleForceWake = async () => {
     if (isWakingDb) return;
@@ -208,7 +222,7 @@ const AppContent: React.FC = () => {
     return groups;
   }, [filteredEvents]);
 
-  const canAccessAdmin = user?.role === 'admin';
+  const canAccessAdmin = user?.role === 'admin' || isLocalAdmin;
 
   const getEventCategory = (event: FestivalEvent) => {
     return categories.find(c => c.id === event.categoryId) || (({ id: 'unknown', name: 'Other' as any, color: '#64748b' }) as any);
@@ -278,22 +292,7 @@ const AppContent: React.FC = () => {
               isLive={isSupabaseConfigured} isDbMode={isDbMode} onRefresh={refreshData}
             />
           ) : (
-            <div className="max-w-md mx-auto mt-20 p-10 bg-white rounded-[2.5rem] border border-slate-200 text-center shadow-xl animate-in zoom-in-95 duration-300">
-              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <ShieldAlert size={40} />
-              </div>
-              <h2 className="text-2xl font-display text-slate-900 mb-2">Privileged Access Required</h2>
-              <p className="text-slate-500 text-sm mb-8 leading-relaxed">
-                Your account ({user?.email}) does not have administrative privileges for the Bali Spirit Festival. 
-                Please contact the coordinator to elevate your role.
-              </p>
-              <button 
-                onClick={() => setIsAdminMode(false)}
-                className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-black transition-all"
-              >
-                Return to Public View
-              </button>
-            </div>
+            <AdminAuth onAuthorized={() => setIsLocalAdmin(true)} />
           )
         ) : (
           <>
