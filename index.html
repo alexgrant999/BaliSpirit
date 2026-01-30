@@ -8,122 +8,72 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
     <style>
-      body {
-        font-family: 'Inter', sans-serif;
-      }
-      .font-display {
-        font-family: 'Playfair Display', serif;
-      }
-      /* Custom scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
-      }
-
-      /* Base hidden state for print-only content on screen */
-      .print-only {
-        display: none;
-      }
-
+      body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+      .font-display { font-family: 'Playfair Display', serif; }
+      #root:empty { background: white; height: 100vh; width: 100vw; }
+      
       /* Print specific styles */
       @media print {
         header, nav, footer, .no-print, button, .filters-container, #root > *:not(.print-only) {
           display: none !important;
         }
-        
-        body, html {
-          background: white !important;
-          color: black !important;
-          width: 100%;
-          height: auto;
-          margin: 0;
-          padding: 0;
-          font-size: 11pt;
-        }
+        body, html { background: white !important; color: black !important; width: 100%; height: auto; margin: 0; padding: 0; font-size: 11pt; }
+        #root { display: block !important; }
+        .print-only { display: block !important; padding: 20mm; }
+      }
 
-        #root {
-          display: block !important;
-        }
-
-        .print-only {
-          display: block !important;
-          padding: 20mm;
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 20px;
-        }
-
-        tr {
-          page-break-inside: avoid;
-        }
-
-        td {
-          border-bottom: 0.5pt solid #000;
-          padding: 8px 4px;
-          vertical-align: top;
-        }
-
-        .category-box {
-          border: 1pt solid black;
-          display: inline-block;
-          width: 18px;
-          height: 18px;
-          text-align: center;
-          line-height: 18px;
-          font-weight: bold;
-          font-size: 10pt;
-          margin-right: 5px;
-        }
-
-        .day-header {
-          font-weight: bold;
-          font-size: 14pt;
-          border-bottom: 1.5pt solid black;
-          margin-top: 30px;
-          margin-bottom: 10px;
-          padding-bottom: 5px;
-        }
-
-        .legend {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          border-bottom: 1.5pt solid black;
-          padding-bottom: 15px;
-          margin-bottom: 20px;
-          font-size: 9pt;
-        }
+      /* Fatal Error Overlay */
+      #fatal-error {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #fff;
+        padding: 40px;
+        color: #ef4444;
+        font-family: monospace;
+        overflow: auto;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react-dom": "https://esm.sh/react-dom@^19.2.4",
-    "date-fns": "https://esm.sh/date-fns@^4.1.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.45.0"
-  }
-}
-</script>
-</head>
+
+    <!-- Polyfill for process.env used by some libraries -->
+    <script>
+      window.process = { env: { NODE_ENV: 'development' } };
+      window.addEventListener('error', function(e) {
+        const overlay = document.getElementById('fatal-error');
+        if (overlay) {
+          overlay.style.display = 'block';
+          overlay.innerHTML = `
+            <h1 style="font-size: 24px; margin-bottom: 20px;">🚨 Fatal App Crash</h1>
+            <p><strong>Message:</strong> ${e.message}</p>
+            <p><strong>File:</strong> ${e.filename}:${e.lineno}</p>
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #fee2e2;">
+            <p style="color: #64748b; font-size: 12px;">Check the browser console for a full stack trace.</p>
+          `;
+        }
+      });
+    </script>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+        "react/": "https://esm.sh/react@^19.2.4/",
+        "react": "https://esm.sh/react@^19.2.4",
+        "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+        "react-dom": "https://esm.sh/react-dom@^19.2.4",
+        "date-fns": "https://esm.sh/date-fns@^4.1.0",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.45.0"
+      }
+    }
+    </script>
+  </head>
   <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
+    <div id="fatal-error"></div>
+    
+    <!-- This is the missing link that was causing the blank screen -->
+    <script type="module" src="index.tsx"></script>
   </body>
 </html>
