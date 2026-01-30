@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect, useCallback, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, ErrorInfo, ReactNode } from 'react';
 import { User, ViewMode, FestivalEvent, Category, Venue, Presenter } from './types';
 import { Filters } from './components/Filters';
 import { EventCard } from './components/EventCard';
@@ -13,7 +12,7 @@ import { MobileNav } from './components/MobileNav';
 import { LotusLogo } from './components/LotusLogo';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
-import { Loader2, Calendar, Database, Clock, Sparkles, AlertTriangle, ChevronRight, RefreshCcw, Activity, Server, FileCode, CheckCircle2, RotateCcw, ShieldAlert } from 'lucide-react';
+import { Loader2, Calendar, Clock, AlertTriangle, RefreshCcw, Activity, ShieldAlert, RotateCcw } from 'lucide-react';
 import { useFestivalData } from './hooks/useFestivalData';
 import { isSupabaseConfigured, supabase, signOut, fetchUserFavorites, toggleFavoriteInDb, getSupabaseStatus } from './services/supabase';
 import { format } from 'date-fns';
@@ -27,9 +26,8 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Fixed ErrorBoundary inheritance by using the imported Component class directly
-// and using class properties for state initialization to avoid potential constructor issues.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Critical Fix: Explicitly use React.Component to ensure proper type inference for props
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -93,10 +91,12 @@ const AppContent: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<string | 'all'>('all');
   
   const [logs, setLogs] = useState<string[]>(['System Startup...']);
-  const [diagResult, setDiagResult] = useState<string | null>(null);
   const [isWakingDb, setIsWakingDb] = useState(false);
 
-  const addLog = (msg: string) => setLogs(prev => [...prev.slice(-3), msg]);
+  // Memoize addLog to be stable across renders
+  const addLog = useCallback((msg: string) => {
+    setLogs(prev => [...prev.slice(-3), msg]);
+  }, []);
 
   const syncUserFromSession = useCallback(async (session: any) => {
     if (!session?.user) {
@@ -124,6 +124,7 @@ const AppContent: React.FC = () => {
       });
       addLog("User authenticated.");
     } catch (err) {
+      console.error("Profile Sync Error:", err);
       setUser({
         id: session.user.id,
         email: session.user.email || '',
@@ -131,7 +132,7 @@ const AppContent: React.FC = () => {
         favorites: []
       });
     }
-  }, []);
+  }, [addLog]);
 
   useEffect(() => {
     addLog("Connecting to Supabase...");
@@ -155,7 +156,7 @@ const AppContent: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [syncUserFromSession]);
+  }, [syncUserFromSession, authLoading, addLog]);
 
   const handleForceWake = async () => {
     if (isWakingDb) return;
@@ -221,7 +222,10 @@ const AppContent: React.FC = () => {
     return presenters.filter(p => event.presenterIds?.includes(p.id));
   };
 
-  if ((dataLoading || authLoading) && !bypassLoading) {
+  // Safe loading check
+  const isLoading = (dataLoading || authLoading) && !bypassLoading;
+
+  if (isLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6 overflow-y-auto">
         <div className="max-w-md w-full flex flex-col items-center py-10">
