@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, Component, ErrorInfo, ReactNode } from 'react';
 import { User, ViewMode, FestivalEvent, Category, Venue, Presenter } from './types';
 import { Filters } from './components/Filters';
 import { EventCard } from './components/EventCard';
@@ -27,8 +27,9 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Fixed ErrorBoundary class by explicitly using React.Component to resolve 'props' type issue
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fixed ErrorBoundary inheritance by using the imported Component class directly
+// and using class properties for state initialization to avoid potential constructor issues.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -92,6 +93,7 @@ const AppContent: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<string | 'all'>('all');
   
   const [logs, setLogs] = useState<string[]>(['System Startup...']);
+  const [diagResult, setDiagResult] = useState<string | null>(null);
   const [isWakingDb, setIsWakingDb] = useState(false);
 
   const addLog = (msg: string) => setLogs(prev => [...prev.slice(-3), msg]);
@@ -106,10 +108,10 @@ const AppContent: React.FC = () => {
       addLog("Syncing profile...");
       const [favorites, profileRes] = await Promise.all([
         fetchUserFavorites(session.user.id).catch(() => [] as string[]),
-        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
+        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle().catch(() => ({ data: null }))
       ]);
 
-      const profile = profileRes?.data;
+      const profile = profileRes.data;
 
       setUser({
         id: session.user.id,

@@ -33,20 +33,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
     setError(null);
     setIsConfigError(false);
 
-    // Defensive trimming to prevent "invalid email" errors from accidental spaces
-    const cleanEmail = email.trim();
-    const cleanPassword = password.trim();
-
-    if (!cleanEmail || !cleanPassword) {
-      setError("Please enter both email and password.");
-      setLoading(false);
-      return;
-    }
-
     try {
       const { error } = isSignUp 
-        ? await supabase.auth.signUp({ email: cleanEmail, password: cleanPassword })
-        : await supabase.auth.signInWithPassword({ email: cleanEmail, password: cleanPassword });
+        ? await supabase.auth.signUp({ email, password })
+        : await supabase.auth.signInWithPassword({ email, password });
       
       if (error) throw error;
       onClose();
@@ -67,7 +57,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
       console.error("Auth error:", err);
       
       if (err.message?.includes("missing OAuth secret") || err.msg?.includes("missing OAuth secret")) {
-        setError("Supabase Configuration Error: You haven't entered the 'Client Secret' in your Supabase Dashboard under Auth > Providers > Google.");
+        setError("Supabase Configuration Error: You haven't entered the 'Client Secret' in your Supabase Dashboard under Auth &gt; Providers &gt; Google.");
         setIsConfigError(true);
       } else if (err.message?.includes("Unsupported provider") || err.code === "validation_failed") {
         setError("Google authentication is currently being configured. Please use Email/Password for now.");
@@ -139,7 +129,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
 
                 <ol className="text-[11px] text-orange-800 space-y-1.5 list-decimal ml-4">
                   <li>Open <strong>Supabase Dashboard</strong>.</li>
-                  <li>Go to <strong>Authentication > URL Configuration</strong>.</li>
+                  <li>Go to <strong>Authentication &gt; URL Configuration</strong>.</li>
                   <li>Update <strong>Site URL</strong> to the URL above.</li>
                   <li>Add the URL above to <strong>Redirect URLs</strong>.</li>
                 </ol>
@@ -201,9 +191,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
             </div>
 
             {error && (
-              <div className={`p-4 rounded-xl flex items-start gap-3 border animate-in fade-in slide-in-from-top-2 ${isConfigError ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-100'}`}>
+              <div className={`p-4 rounded-xl flex items-start gap-3 border ${isConfigError ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-100'}`}>
                 {isConfigError ? <Settings className="text-amber-500 shrink-0 mt-0.5" size={18} /> : <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={18} />}
-                <div className="flex-1 text-left">
+                <div className="flex-1">
                   <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${isConfigError ? 'text-amber-700' : 'text-red-700'}`}>
                     {isConfigError ? 'Config Needed' : 'Error'}
                   </p>
@@ -225,10 +215,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
           <p className="mt-8 text-sm text-slate-500">
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button 
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setError(null);
-              }}
+              onClick={() => setIsSignUp(!isSignUp)}
               disabled={loading}
               className="text-orange-600 font-bold hover:underline disabled:opacity-50"
             >
