@@ -5,16 +5,7 @@
 -- 0. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 1. CLEANUP (Optional: Uncomment if you want a TOTAL wipe)
--- DROP TABLE IF EXISTS user_favorites CASCADE;
--- DROP TABLE IF EXISTS profiles CASCADE;
--- DROP TABLE IF EXISTS event_presenters CASCADE;
--- DROP TABLE IF EXISTS events CASCADE;
--- DROP TABLE IF EXISTS presenters CASCADE;
--- DROP TABLE IF EXISTS venues CASCADE;
--- DROP TABLE IF EXISTS categories CASCADE;
-
--- 2. TABLES
+-- 1. TABLES
 CREATE TABLE IF NOT EXISTS categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,
@@ -63,6 +54,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   email TEXT NOT NULL,
   role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
   interests TEXT[] DEFAULT '{}',
+  phone TEXT,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -82,12 +75,11 @@ ALTER TABLE event_presenters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_favorites ENABLE ROW LEVEL SECURITY;
 
--- 4. POLICIES (Corrected Idempotent Loop)
+-- 4. POLICIES
 DO $$ 
 DECLARE
     pol record;
 BEGIN
-    -- Drop all existing policies on our public tables to start fresh
     FOR pol IN (
         SELECT policyname, tablename 
         FROM pg_policies 
@@ -98,31 +90,30 @@ BEGIN
         EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
     END LOOP;
 
-    -- Categories
     CREATE POLICY "Public Read Categories" ON categories FOR SELECT USING (true);
     CREATE POLICY "Admin All Categories" ON categories FOR ALL USING (true);
 
-    -- Venues
     CREATE POLICY "Public Read Venues" ON venues FOR SELECT USING (true);
     CREATE POLICY "Admin All Venues" ON venues FOR ALL USING (true);
 
-    -- Presenters
     CREATE POLICY "Public Read Presenters" ON presenters FOR SELECT USING (true);
     CREATE POLICY "Admin All Presenters" ON presenters FOR ALL USING (true);
 
-    -- Events
     CREATE POLICY "Public Read Events" ON events FOR SELECT USING (true);
     CREATE POLICY "Admin All Events" ON events FOR ALL USING (true);
 
-    -- Event Presenters
     CREATE POLICY "Public Read Event Presenters" ON event_presenters FOR SELECT USING (true);
     CREATE POLICY "Admin All Event Presenters" ON event_presenters FOR ALL USING (true);
 
-    -- Profiles
     CREATE POLICY "Users view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
-    CREATE POLICY "Admin view all profiles" ON profiles FOR SELECT USING (true);
+    CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+    CREATE POLICY "Admin view all profiles" ON profiles FOR SELECT USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admin update all profiles" ON profiles FOR UPDATE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
 
-    -- Favorites
     CREATE POLICY "Users manage favorites" ON user_favorites FOR ALL USING (auth.uid() = user_id);
 END $$;
 

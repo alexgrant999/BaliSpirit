@@ -46,8 +46,10 @@ export interface User {
   id: string;
   email: string;
   role: 'user' | 'admin';
-  favorites: string[]; // array of event IDs
-  interests?: string[]; // user selected interests for AI
+  favorites: string[];
+  interests?: string[];
+  phone?: string;
+  avatarUrl?: string;
 }
 
 export type ViewMode = 'grid' | 'list' | 'venue';

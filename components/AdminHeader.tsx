@@ -1,12 +1,12 @@
 
 import React from 'react';
-import { Database, RefreshCw, Calendar, Users, MapPin, AlertCircle } from 'lucide-react';
+import { Database, RefreshCw, Calendar, Users, MapPin, AlertCircle, ShieldCheck } from 'lucide-react';
 
 interface AdminHeaderProps {
   isDbMode: boolean;
-  activeTab: 'sessions' | 'presenters' | 'venues';
+  activeTab: 'sessions' | 'presenters' | 'venues' | 'users';
   onRefresh: () => void;
-  setActiveTab: (tab: 'sessions' | 'presenters' | 'venues') => void;
+  setActiveTab: (tab: 'sessions' | 'presenters' | 'venues' | 'users') => void;
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({
@@ -27,24 +27,30 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         </div>
       </div>
       
-      <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full lg:w-auto">
+      <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full lg:w-auto">
         <button 
           onClick={() => setActiveTab('sessions')}
-          className={`flex-1 lg:flex-none px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'sessions' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'sessions' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
         >
           <Calendar size={14} /> Sessions
         </button>
         <button 
           onClick={() => setActiveTab('presenters')}
-          className={`flex-1 lg:flex-none px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'presenters' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'presenters' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
         >
           <Users size={14} /> Presenters
         </button>
         <button 
           onClick={() => setActiveTab('venues')}
-          className={`flex-1 lg:flex-none px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'venues' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'venues' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
         >
           <MapPin size={14} /> Venues
+        </button>
+        <button 
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'users' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+        >
+          <ShieldCheck size={14} /> Users
         </button>
       </div>
     </div>

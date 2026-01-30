@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Layout, Shield, User as UserIcon, LogOut, ChevronDown } from 'lucide-react';
+import { Layout, Shield, User as UserIcon, LogOut, ChevronDown, Settings } from 'lucide-react';
 import { LotusLogo } from './LotusLogo';
 import { User } from '../types';
 
@@ -13,6 +13,7 @@ interface HeaderProps {
   onHomeClick: () => void;
   onAuthClick: () => void;
   onSignOut: () => void;
+  onSettingsClick: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -23,7 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
   onAdminToggle,
   onHomeClick,
   onAuthClick,
-  onSignOut
+  onSignOut,
+  onSettingsClick
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
@@ -77,12 +79,16 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative">
               <button 
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="flex items-center gap-2 p-1.5 bg-slate-50 border border-slate-200 rounded-full hover:bg-slate-100 transition-colors"
+                className="flex items-center gap-2 p-1 bg-white border border-slate-200 rounded-full hover:bg-slate-50 transition-colors shadow-sm"
               >
-                <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center font-bold text-xs">
-                  {user.email.charAt(0).toUpperCase()}
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-xs border border-white">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    user.email.charAt(0).toUpperCase()
+                  )}
                 </div>
-                <ChevronDown size={14} className={`text-slate-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={`mr-1 text-slate-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
               </button>
 
               {showProfileMenu && (
@@ -94,6 +100,12 @@ export const Header: React.FC<HeaderProps> = ({
                       <p className="text-sm font-bold text-slate-900 truncate">{user.email}</p>
                     </div>
                     <div className="p-2">
+                      <button 
+                        onClick={() => { onSettingsClick(); setShowProfileMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        <Settings size={16} /> My Account
+                      </button>
                       <button 
                         onClick={() => { onAdminToggle(); setShowProfileMenu(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"

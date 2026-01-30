@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { User, ViewMode, FestivalEvent } from './types';
+import React, { useState, useMemo, useEffect, useCallback, Component, ErrorInfo, ReactNode } from 'react';
+import { User, ViewMode, FestivalEvent, Category, Venue, Presenter } from './types';
 import { Filters } from './components/Filters';
 import { EventCard } from './components/EventCard';
 import { EventModal } from './components/EventModal';
@@ -13,15 +13,67 @@ import { Header } from './components/Header';
 import { MobileNav } from './components/MobileNav';
 import { LotusLogo } from './components/LotusLogo';
 import { AuthModal } from './components/AuthModal';
-import { InterestPicker } from './components/InterestPicker';
-import { Loader2, Calendar, Database, Clock, Sparkles, AlertTriangle, ChevronRight, RefreshCcw, Activity, Server, FileCode, CheckCircle2 } from 'lucide-react';
+import { SettingsModal } from './components/SettingsModal';
+import { Loader2, Calendar, Database, Clock, Sparkles, AlertTriangle, ChevronRight, RefreshCcw, Activity, Server, FileCode, CheckCircle2, RotateCcw } from 'lucide-react';
 import { useFestivalData } from './hooks/useFestivalData';
 import { isSupabaseConfigured, supabase, signOut, fetchUserFavorites, toggleFavoriteInDb, getSupabaseStatus } from './services/supabase';
 import { format } from 'date-fns';
 
+interface ErrorBoundaryProps {
+  children?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+// Fixed ErrorBoundary to explicitly use React.Component and handle props/state for TypeScript
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Use constructor to ensure TypeScript recognizes the properties and state initialization
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-white text-center">
+          <div className="p-4 bg-red-50 rounded-full text-red-600 mb-6">
+            <AlertTriangle size={48} />
+          </div>
+          <h1 className="text-2xl font-display text-slate-900 mb-2">Something went wrong</h1>
+          <p className="text-slate-500 text-sm max-w-md mb-8">
+            The application encountered an unexpected error.
+          </p>
+          <pre className="p-4 bg-slate-50 rounded-2xl text-[10px] text-red-600 text-left font-mono overflow-auto max-w-full mb-8 border border-slate-100">
+            {this.state.error?.toString()}
+          </pre>
+          <button 
+            onClick={() => window.location.reload()}
+            className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all"
+          >
+            <RotateCcw size={18} /> Reload Application
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 type Tab = 'schedule' | 'presenters' | 'venues';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const {
     loading: dataLoading, events, categories, venues, presenters, isDbMode,
     refreshData, onAddEvent, onUpdateEvent, onDeleteEvent, 
@@ -32,6 +84,7 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [bypassLoading, setBypassLoading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isOrganizerAuthorized, setIsOrganizerAuthorized] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
@@ -52,39 +105,59 @@ const App: React.FC = () => {
   const addLog = (msg: string) => setLogs(prev => [...prev.slice(-3), msg]);
 
   const syncUserFromSession = useCallback(async (session: any) => {
+    if (!session?.user) {
+      setUser(null);
+      return;
+    }
+
     try {
-      if (session?.user) {
-        addLog("Syncing profile...");
-        const favorites = await fetchUserFavorites(session.user.id);
-        const { data: profile } = await supabase.from('profiles').select('role, interests').eq('id', session.user.id).maybeSingle();
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          role: (profile?.role as 'admin' | 'user') || 'user',
-          interests: profile?.interests || [],
-          favorites
-        });
-        addLog("User authenticated.");
-      } else {
-        setUser(null);
-      }
+      addLog("Syncing profile...");
+      const [favorites, profileRes] = await Promise.all([
+        fetchUserFavorites(session.user.id).catch(() => [] as string[]),
+        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle().catch(() => ({ data: null }))
+      ]);
+
+      const profile = profileRes.data;
+
+      setUser({
+        id: session.user.id,
+        email: session.user.email || '',
+        role: (profile?.role as 'admin' | 'user') || 'user',
+        interests: profile?.interests || [],
+        favorites: favorites || [],
+        phone: profile?.phone,
+        avatarUrl: profile?.avatar_url
+      });
+      addLog("User authenticated.");
     } catch (err) {
-      console.error("Auth sync error:", err);
+      setUser({
+        id: session.user.id,
+        email: session.user.email || '',
+        role: 'user',
+        favorites: []
+      });
     }
   }, []);
 
   useEffect(() => {
     addLog("Connecting to Supabase...");
     
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      syncUserFromSession(session).finally(() => {
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await syncUserFromSession(session);
+      } catch (err) {
+        console.error(err);
+      } finally {
         setAuthLoading(false);
-        addLog("Components ready.");
-      });
-    });
+      }
+    };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_, session) => {
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       await syncUserFromSession(session);
+      if (authLoading) setAuthLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -109,31 +182,59 @@ const App: React.FC = () => {
 
   const festivalDays = useMemo(() => {
     const days = new Set<string>();
-    events.forEach(e => days.add(format(new Date(e.startTime), 'yyyy-MM-dd')));
+    events.forEach(e => {
+      try {
+        days.add(format(new Date(e.startTime), 'yyyy-MM-dd'));
+      } catch (err) {}
+    });
     return Array.from(days).sort();
   }, [events]);
 
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
-      const eventDate = format(new Date(event.startTime), 'yyyy-MM-dd');
-      const matchesDay = selectedDay === 'all' || eventDate === selectedDay;
-      const matchesSearch = event.title.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = selectedCategory === 'all' || event.categoryId === selectedCategory;
-      const matchesVenue = selectedVenue === 'all' || event.venueId === selectedVenue;
-      const matchesFavorite = !onlyFavorites || (user?.favorites?.includes(event.id));
-      return matchesDay && matchesSearch && matchesCategory && matchesVenue && matchesFavorite;
-    }).sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      try {
+        const eventDate = format(new Date(event.startTime), 'yyyy-MM-dd');
+        const matchesDay = selectedDay === 'all' || eventDate === selectedDay;
+        const matchesSearch = event.title.toLowerCase().includes(search.toLowerCase());
+        const matchesCategory = selectedCategory === 'all' || event.categoryId === selectedCategory;
+        const matchesVenue = selectedVenue === 'all' || event.venueId === selectedVenue;
+        const matchesFavorite = !onlyFavorites || (user?.favorites?.includes(event.id));
+        return matchesDay && matchesSearch && matchesCategory && matchesVenue && matchesFavorite;
+      } catch (err) {
+        return false;
+      }
+    }).sort((a,b) => {
+      const timeA = new Date(a.startTime).getTime();
+      const timeB = new Date(b.startTime).getTime();
+      return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+    });
   }, [events, search, selectedCategory, selectedVenue, onlyFavorites, user, selectedDay]);
 
   const eventsByDay = useMemo(() => {
     const groups: Record<string, FestivalEvent[]> = {};
     filteredEvents.forEach(event => {
-      const dayLabel = format(new Date(event.startTime), 'EEEE, MMMM d');
-      if (!groups[dayLabel]) groups[dayLabel] = [];
-      groups[dayLabel].push(event);
+      try {
+        const dayLabel = format(new Date(event.startTime), 'EEEE, MMMM d');
+        if (!groups[dayLabel]) groups[dayLabel] = [];
+        groups[dayLabel].push(event);
+      } catch (err) {}
     });
     return groups;
   }, [filteredEvents]);
+
+  const showAdminPanel = isAdminMode && (user?.role === 'admin' || isOrganizerAuthorized);
+
+  const getEventCategory = (event: FestivalEvent) => {
+    return categories.find(c => c.id === event.categoryId) || (({ id: 'unknown', name: 'Other' as any, color: '#64748b' }) as any);
+  };
+
+  const getEventVenue = (event: FestivalEvent) => {
+    return venues.find(v => v.id === event.venueId) || { id: 'unknown', name: 'Unknown Venue' } as Venue;
+  };
+
+  const getEventPresenters = (event: FestivalEvent) => {
+    return presenters.filter(p => event.presenterIds?.includes(p.id));
+  };
 
   if ((dataLoading || authLoading) && !bypassLoading) {
     return (
@@ -178,43 +279,10 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
-
-          {showSetupGuide && (
-            <div className="w-full p-6 bg-slate-50 rounded-[2rem] border border-slate-100 text-left animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-                <Server size={14} /> Local Setup Checklist
-              </h3>
-              <div className="space-y-4">
-                <div className="flex gap-3">
-                  <div className="mt-1"><Server size={16} className="text-orange-500" /></div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-700 uppercase">Don't open via file explorer</p>
-                    <p className="text-[10px] text-slate-500 leading-tight">Browser modules require a local server. Use VS Code's "Live Server" or run <code className="bg-slate-200 px-1 rounded text-[9px]">npx serve .</code> in your terminal.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="mt-1"><FileCode size={16} className="text-blue-500" /></div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-700 uppercase">Run the SQL Schema</p>
-                    <p className="text-[10px] text-slate-500 leading-tight">Paste the contents of <code className="bg-slate-200 px-1 rounded text-[9px]">schema.sql</code> into your Supabase SQL Editor and click "Run".</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="mt-1"><CheckCircle2 size={16} className="text-green-500" /></div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-700 uppercase">Redirect URLs</p>
-                    <p className="text-[10px] text-slate-500 leading-tight">Add your local URL (e.g. <code className="bg-slate-200 px-1 rounded text-[9px]">http://localhost:5000</code>) to Supabase Auth &gt; Redirect URLs.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
   }
-
-  const showAdminPanel = isAdminMode && (user?.role === 'admin' || isOrganizerAuthorized);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -222,7 +290,9 @@ const App: React.FC = () => {
         activeTab={activeTab} isAdminMode={isAdminMode} user={user}
         onTabChange={setActiveTab} onAdminToggle={() => setIsAdminMode(!isAdminMode)}
         onHomeClick={() => {setActiveTab('schedule'); setIsAdminMode(false);}}
-        onAuthClick={() => setShowAuthModal(true)} onSignOut={() => signOut().then(() => setUser(null))}
+        onAuthClick={() => setShowAuthModal(true)} 
+        onSignOut={() => signOut().then(() => setUser(null))}
+        onSettingsClick={() => setShowSettingsModal(true)}
       />
 
       <main className="flex-1 bg-slate-50 pb-20 md:pb-8">
@@ -281,9 +351,11 @@ const App: React.FC = () => {
                             <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}`}>
                               {dayEvents.map(event => (
                                 <EventCard 
-                                  key={event.id} event={event} category={categories.find(c => c.id === event.categoryId)!}
-                                  venue={venues.find(v => v.id === event.venueId)!}
-                                  presenters={presenters.filter(p => event.presenterIds.includes(p.id))}
+                                  key={event.id} 
+                                  event={event} 
+                                  category={getEventCategory(event)}
+                                  venue={getEventVenue(event)}
+                                  presenters={getEventPresenters(event)}
                                   isFavorite={user?.favorites?.includes(event.id) || false}
                                   onToggleFavorite={(id) => {
                                     if (!user) setShowAuthModal(true);
@@ -312,13 +384,20 @@ const App: React.FC = () => {
 
       {!isAdminMode && <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
+      {showSettingsModal && user && (
+        <SettingsModal 
+          user={user} 
+          onClose={() => setShowSettingsModal(false)} 
+          onUpdate={setUser}
+        />
+      )}
       
       {selectedEventId && (
         <EventModal 
           event={events.find(e => e.id === selectedEventId)!}
-          category={categories.find(c => c.id === events.find(e => e.id === selectedEventId)!.categoryId)!}
-          venue={venues.find(v => v.id === events.find(e => e.id === selectedEventId)!.venueId)!}
-          presenters={presenters.filter(p => events.find(e => e.id === selectedEventId)!.presenterIds.includes(p.id))}
+          category={getEventCategory(events.find(e => e.id === selectedEventId)!)}
+          venue={getEventVenue(events.find(e => e.id === selectedEventId)!)}
+          presenters={getEventPresenters(events.find(e => e.id === selectedEventId)!)}
           onClose={() => setSelectedEventId(null)} onPresenterClick={setSelectedPresenterId}
         />
       )}
@@ -326,5 +405,11 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const App: React.FC = () => (
+  <ErrorBoundary>
+    <AppContent />
+  </ErrorBoundary>
+);
 
 export default App;

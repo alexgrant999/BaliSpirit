@@ -33,10 +33,27 @@ export const useFestivalData = () => {
           supabase.from('presenters').select('*')
         ]);
 
-        if (eventsData.status === 'fulfilled') setEvents(eventsData.value);
-        if (catsRes.status === 'fulfilled' && !catsRes.value.error) setCategories(catsRes.value.data || []);
-        if (vnsRes.status === 'fulfilled' && !vnsRes.value.error) setVenues(vnsRes.value.data || []);
-        if (presRes.status === 'fulfilled' && !presRes.value.error) setPresenterData(presRes.value.data || []);
+        if (eventsData.status === 'fulfilled') {
+          setEvents(eventsData.value || []);
+        }
+        
+        if (catsRes.status === 'fulfilled' && !catsRes.value.error) {
+          setCategories(catsRes.value.data || []);
+        }
+        
+        if (vnsRes.status === 'fulfilled' && !vnsRes.value.error) {
+          setVenues(vnsRes.value.data || []);
+        }
+        
+        if (presRes.status === 'fulfilled' && !presRes.value.error) {
+          setPresenterData(presRes.value.data || []);
+        }
+      } else {
+        // Clear data if disconnected to prevent inconsistent rendering
+        setEvents([]);
+        setCategories([]);
+        setVenues([]);
+        setPresenterData([]);
       }
     } catch (err) {
       console.error("Festival Data Refresh Error:", err);
@@ -45,7 +62,6 @@ export const useFestivalData = () => {
     }
   }, []);
 
-  // CRUD actions remain unchanged but rely on refreshed data
   const onAddEvent = async (event: Partial<FestivalEvent>) => {
     if (!supabase) return;
     const { data: newEvent, error } = await supabase.from('events').insert([{

@@ -6,6 +6,7 @@ import { AdminHeader } from './AdminHeader';
 import { AdminSessionManager } from './AdminSessionManager';
 import { AdminPresenterManager } from './AdminPresenterManager';
 import { AdminVenueManager } from './AdminVenueManager';
+import { AdminUserManager } from './AdminUserManager';
 
 interface AdminPanelProps {
   events: FestivalEvent[];
@@ -24,7 +25,7 @@ interface AdminPanelProps {
   onRefresh: () => void;
 }
 
-type AdminTab = 'sessions' | 'presenters' | 'venues';
+type AdminTab = 'sessions' | 'presenters' | 'venues' | 'users';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   events, categories, venues, presenters, 
@@ -39,12 +40,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     <div className="max-w-7xl mx-auto px-4 py-8 animate-in fade-in duration-500">
       <AdminHeader 
         isDbMode={isDbMode}
-        activeTab={activeTab}
+        activeTab={activeTab as any}
         onRefresh={onRefresh}
-        setActiveTab={setActiveTab}
+        setActiveTab={setActiveTab as any}
       />
 
-      {!isDbMode && isLive && (
+      {!isDbMode && isLive && activeTab !== 'users' && (
         <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-4 text-amber-800 shadow-sm">
           <AlertTriangle size={24} className="shrink-0" />
           <div className="text-sm">
@@ -80,6 +81,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           onSaveVenue={onSaveVenue}
           onDeleteVenue={onDeleteVenue}
         />
+      )}
+
+      {activeTab === 'users' && (
+        <AdminUserManager />
       )}
     </div>
   );

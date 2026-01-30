@@ -15,31 +15,26 @@ export const supabase = createClient(URL, KEY, {
   }
 });
 
-/**
- * Enhanced diagnostic to detect schema issues vs connection issues
- */
 export const getSupabaseStatus = async (timeoutMs = 30000) => {
   const check = async () => {
     try {
       const { error, status } = await supabase.from('categories').select('id').limit(1);
-      
       if (error) {
         if (error.message.includes('relation "categories" does not exist')) {
-          return { ok: false, message: 'Database connected, but schema is missing. Please run schema.sql in the Supabase SQL Editor.' };
+          return { ok: false, message: 'Schema missing. Run schema.sql.' };
         }
-        return { ok: false, message: `DB Error: ${error.message} (Code: ${error.code})` };
+        return { ok: false, message: `DB Error: ${error.message}` };
       }
-      
-      return { ok: true, message: 'Connected to Bali Spirit Database', status };
+      return { ok: true, message: 'Connected', status };
     } catch (e: any) {
-      return { ok: false, message: `Network error: ${e.message}. The database might be waking up from sleep.` };
+      return { ok: false, message: `Network error: ${e.message}` };
     }
   };
 
   return Promise.race([
     check(),
     new Promise<{ ok: boolean; message: string }>((resolve) =>
-      setTimeout(() => resolve({ ok: false, message: 'Connection timed out. Database is likely waking up.' }), timeoutMs)
+      setTimeout(() => resolve({ ok: false, message: 'Connection timed out.' }), timeoutMs)
     )
   ]);
 };
@@ -52,34 +47,23 @@ export const fetchFullEvents = async () => {
       .order('start_time', { ascending: true });
 
     if (error) {
-      // Fallback for partial schema matches
       const { data: simple } = await supabase.from('events').select('*').order('start_time', { ascending: true });
       return (simple || []).map((e: any) => ({
-        id: e.id,
-        title: e.title,
-        description: e.description,
-        startTime: e.start_time,
-        endTime: e.end_time,
-        venueId: e.venue_id,
-        categoryId: e.category_id,
-        presenterIds: [],
-        tags: e.tags || []
+        id: e.id, title: e.title, description: e.description,
+        startTime: e.start_time, endTime: e.end_time,
+        venueId: e.venue_id, categoryId: e.category_id,
+        presenterIds: [], tags: e.tags || []
       }));
     }
 
     return (data || []).map((event: any) => ({
-      id: event.id,
-      title: event.title,
-      description: event.description,
-      startTime: event.start_time,
-      endTime: event.end_time,
-      venueId: event.venue_id,
-      categoryId: event.category_id,
+      id: event.id, title: event.title, description: event.description,
+      startTime: event.start_time, endTime: event.end_time,
+      venueId: event.venue_id, categoryId: event.category_id,
       presenterIds: event.event_presenters?.map((p: any) => p.presenter_id) || [],
       tags: event.tags || []
     }));
   } catch (err) {
-    console.error("Critical fetch error:", err);
     return [];
   }
 };
@@ -108,9 +92,32 @@ export const toggleFavoriteInDb = async (userId: string, eventId: string, isCurr
   }
 };
 
-export const uploadPresenterImage = async (file: File): Promise<string> => {
-  const path = `presenters/${Date.now()}-${file.name}`;
-  const { error } = await supabase.storage.from('presenters').upload(path, file);
+export const updateProfile = async (userId: string, updates: { email?: string; phone?: string; avatar_url?: string; interests?: string[] }) => {
+  if (updates.email) {
+    const { error: authError } = await supabase.auth.updateUser({ email: updates.email });
+    if (authError) throw authError;
+  }
+  const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
   if (error) throw error;
-  return supabase.storage.from('presenters').getPublicUrl(path).data.publicUrl;
 };
+
+export const fetchAllProfiles = async () => {
+  const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+export const updateUserRole = async (userId: string, role: 'user' | 'admin') => {
+  const { error } = await supabase.from('profiles').update({ role }).eq('id', userId);
+  if (error) throw error;
+};
+
+export const uploadFile = async (bucket: string, file: File): Promise<string> => {
+  const path = `${Date.now()}-${file.name}`;
+  const { error } = await supabase.storage.from(bucket).upload(path, file);
+  if (error) throw error;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+};
+
+export const uploadPresenterImage = (file: File) => uploadFile('presenters', file);
+export const uploadAvatar = (file: File) => uploadFile('avatars', file);
