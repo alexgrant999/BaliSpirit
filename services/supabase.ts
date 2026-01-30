@@ -15,56 +15,69 @@ export const supabase = createClient(URL, KEY, {
   }
 });
 
-export const getSupabaseStatus = async (timeoutMs = 30000) => {
-  const check = async () => {
-    try {
-      const { error, status } = await supabase.from('categories').select('id').limit(1);
-      if (error) {
-        if (error.message.includes('relation "categories" does not exist')) {
-          return { ok: false, message: 'Schema missing. Run schema.sql.' };
-        }
-        return { ok: false, message: `DB Error: ${error.message}` };
-      }
-      return { ok: true, message: 'Connected', status };
-    } catch (e: any) {
-      return { ok: false, message: `Network error: ${e.message}` };
+export const getSupabaseStatus = async () => {
+  try {
+    const { data, error } = await supabase.from('categories').select('id').limit(1);
+    if (error) {
+      console.error("Connection Check Failed:", error.message);
+      return { ok: false, message: error.message };
     }
-  };
-
-  return Promise.race([
-    check(),
-    new Promise<{ ok: boolean; message: string }>((resolve) =>
-      setTimeout(() => resolve({ ok: false, message: 'Connection timed out.' }), timeoutMs)
-    )
-  ]);
+    return { ok: true, message: 'Connected' };
+  } catch (e: any) {
+    return { ok: false, message: e.message };
+  }
 };
 
-export const fetchFullEvents = async () => {
+/**
+ * Fetches all core festival data in a single sync operation
+ */
+export const fetchFestivalData = async () => {
+  console.group("🚀 Supabase Sync Diagnostics");
   try {
-    const { data, error } = await supabase
-      .from('events')
-      .select('*, venue:venues(id, name), category:categories(id, name), event_presenters(presenter_id)')
-      .order('start_time', { ascending: true });
+    const [eventsRes, catsRes, vnsRes, presRes, epRes] = await Promise.all([
+      supabase.from('events').select('*').order('start_time'),
+      supabase.from('categories').select('*').order('name'),
+      supabase.from('venues').select('*').order('name'),
+      supabase.from('presenters').select('*').order('name'),
+      supabase.from('event_presenters').select('*')
+    ]);
 
-    if (error) {
-      const { data: simple } = await supabase.from('events').select('*').order('start_time', { ascending: true });
-      return (simple || []).map((e: any) => ({
-        id: e.id, title: e.title, description: e.description,
-        startTime: e.start_time, endTime: e.end_time,
-        venueId: e.venue_id, categoryId: e.category_id,
-        presenterIds: [], tags: e.tags || []
-      }));
+    // Log individual table health
+    console.log("Categories found:", catsRes.data?.length || 0);
+    console.log("Venues found:", vnsRes.data?.length || 0);
+    console.log("Presenters found:", presRes.data?.length || 0);
+    console.log("Events found:", eventsRes.data?.length || 0);
+    
+    if (presRes.data && presRes.data.length > 0) {
+      console.log("Sample Presenter from DB:", presRes.data[0]);
     }
 
-    return (data || []).map((event: any) => ({
-      id: event.id, title: event.title, description: event.description,
-      startTime: event.start_time, endTime: event.end_time,
-      venueId: event.venue_id, categoryId: event.category_id,
-      presenterIds: event.event_presenters?.map((p: any) => p.presenter_id) || [],
-      tags: event.tags || []
+    const events = (eventsRes.data || []).map((e: any) => ({
+      id: e.id,
+      title: e.title,
+      description: e.description || '',
+      startTime: e.start_time,
+      endTime: e.end_time,
+      venueId: e.venue_id,
+      categoryId: e.category_id,
+      tags: e.tags || [],
+      presenterIds: (epRes.data || [])
+        .filter((ep: any) => ep.event_id === e.id)
+        .map((ep: any) => ep.presenter_id)
     }));
+
+    console.groupEnd();
+
+    return {
+      events,
+      categories: catsRes.data || [],
+      venues: vnsRes.data || [],
+      presenters: presRes.data || []
+    };
   } catch (err) {
-    return [];
+    console.error("Critical Sync Error:", err);
+    console.groupEnd();
+    throw err;
   }
 };
 
@@ -92,11 +105,7 @@ export const toggleFavoriteInDb = async (userId: string, eventId: string, isCurr
   }
 };
 
-export const updateProfile = async (userId: string, updates: { email?: string; phone?: string; avatar_url?: string; interests?: string[] }) => {
-  if (updates.email) {
-    const { error: authError } = await supabase.auth.updateUser({ email: updates.email });
-    if (authError) throw authError;
-  }
+export const updateProfile = async (userId: string, updates: any) => {
   const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
   if (error) throw error;
 };

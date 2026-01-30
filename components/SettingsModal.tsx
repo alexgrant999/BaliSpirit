@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, User as UserIcon, Mail, Phone, Camera, Loader2, Save, CheckCircle2, UploadCloud } from 'lucide-react';
+import { X, User as UserIcon, Mail, Phone, Camera, Loader2, Save, CheckCircle2 } from 'lucide-react';
 import { User } from '../types';
 import { updateProfile, uploadAvatar } from '../services/supabase';
 
@@ -16,18 +16,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ user, onClose, onU
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processFile = async (file: File) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
-    
-    // Simple validation
-    if (!file.type.startsWith('image/')) {
-      alert("Please upload an image file (JPG, PNG, etc).");
-      return;
-    }
 
     setIsUploading(true);
     try {
@@ -38,32 +32,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ user, onClose, onU
     } finally {
       setIsUploading(false);
     }
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) await processFile(file);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    
-    const file = e.dataTransfer.files?.[0];
-    if (file) await processFile(file);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -104,53 +72,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ user, onClose, onU
 
           <form onSubmit={handleSave} className="space-y-6">
             <div className="flex flex-col items-center mb-8">
-              <div 
-                className={`relative group cursor-pointer transition-all duration-300 ${isDragging ? 'scale-105' : ''}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => !isUploading && fileInputRef.current?.click()}
-              >
-                <div className={`w-32 h-32 rounded-full overflow-hidden bg-slate-100 border-4 shadow-xl relative transition-all duration-300 ${isDragging ? 'border-orange-500 ring-4 ring-orange-100' : 'border-white'}`}>
+              <div className="relative group">
+                <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 border-4 border-white shadow-lg relative">
                   {avatarUrl ? (
-                    <img src={avatarUrl} alt="Avatar" className={`w-full h-full object-cover transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`} />
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-100">
-                      <UserIcon size={48} />
+                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                      <UserIcon size={40} />
                     </div>
                   )}
-                  
-                  {isDragging && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-orange-50/90 text-orange-600 animate-in fade-in duration-200">
-                      <UploadCloud size={32} className="mb-1 animate-bounce" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Drop Image</span>
-                    </div>
-                  )}
-
                   {isUploading && (
-                    <div className="absolute inset-0 z-30 bg-white/80 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
                       <Loader2 className="animate-spin text-orange-600" />
                     </div>
                   )}
-
-                  {!isDragging && !isUploading && (
-                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
-                       <Camera size={24} className="text-white drop-shadow-md" />
-                     </div>
-                  )}
                 </div>
-                
-                {!isDragging && (
-                  <div className="absolute bottom-1 right-1 p-2 bg-orange-600 text-white rounded-full shadow-lg border-2 border-white z-10 transition-transform group-hover:scale-110">
-                    <Camera size={16} />
-                  </div>
-                )}
-                
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 p-2 bg-orange-600 text-white rounded-full shadow-lg hover:bg-orange-700 transition-all scale-90 group-hover:scale-100"
+                >
+                  <Camera size={16} />
+                </button>
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleAvatarUpload} />
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-4 flex items-center gap-2">
-                {isDragging ? <span className="text-orange-600">Release to Upload</span> : "Drag image here or click to upload"}
-              </p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-4">Profile Image</p>
             </div>
 
             <div className="space-y-4">

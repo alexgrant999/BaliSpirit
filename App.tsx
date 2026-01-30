@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback, ErrorInfo, ReactNode } from 'react';
 import { User, ViewMode, FestivalEvent, Category, Venue, Presenter } from './types';
 import { Filters } from './components/Filters';
@@ -13,7 +14,7 @@ import { MobileNav } from './components/MobileNav';
 import { LotusLogo } from './components/LotusLogo';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
-import { Loader2, Calendar, Clock, AlertTriangle, RefreshCcw, Activity, ShieldAlert, RotateCcw } from 'lucide-react';
+import { Loader2, Calendar, Clock, AlertTriangle, RefreshCcw, Activity, RotateCcw, ShieldCheck, Database } from 'lucide-react';
 import { useFestivalData } from './hooks/useFestivalData';
 import { isSupabaseConfigured, supabase, signOut, fetchUserFavorites, toggleFavoriteInDb, getSupabaseStatus } from './services/supabase';
 import { format } from 'date-fns';
@@ -27,18 +28,14 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Critical Fix: Use React.Component directly to ensure proper type inference for props
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null };
-
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
-
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
-
   render() {
     if (this.state.hasError) {
       return (
@@ -47,16 +44,11 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             <AlertTriangle size={48} />
           </div>
           <h1 className="text-2xl font-display text-slate-900 mb-2">Something went wrong</h1>
-          <p className="text-slate-500 text-sm max-w-md mb-8">
-            The application encountered an unexpected error.
-          </p>
+          <p className="text-slate-500 text-sm max-w-md mb-8">The application encountered an unexpected error.</p>
           <pre className="p-4 bg-slate-50 rounded-2xl text-[10px] text-red-600 text-left font-mono overflow-auto max-w-full mb-8 border border-slate-100">
             {this.state.error?.toString()}
           </pre>
-          <button 
-            onClick={() => window.location.reload()}
-            className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all"
-          >
+          <button onClick={() => window.location.reload()} className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all">
             <RotateCcw size={18} /> Reload Application
           </button>
         </div>
@@ -70,18 +62,17 @@ type Tab = 'schedule' | 'presenters' | 'venues';
 
 const AppContent: React.FC = () => {
   const {
-    loading: dataLoading, events, categories, venues, presenters, isDbMode,
+    loading: dataLoading, events, categories, venues, presenters, isDbMode, statusMessage,
     refreshData, onAddEvent, onUpdateEvent, onDeleteEvent, 
     onSavePresenter, onDeletePresenter, onSaveVenue, onDeleteVenue
   } = useFestivalData();
 
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [bypassLoading, setBypassLoading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [isLocalAdmin, setIsLocalAdmin] = useState(false); // New state for local admin override
+  const [isLocalAdmin, setIsLocalAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -91,54 +82,34 @@ const AppContent: React.FC = () => {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedPresenterId, setSelectedPresenterId] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | 'all'>('all');
-  
-  const [logs, setLogs] = useState<string[]>(['System Startup...']);
-  const [isWakingDb, setIsWakingDb] = useState(false);
-
-  // Memoize addLog to be stable across renders
-  const addLog = useCallback((msg: string) => {
-    setLogs(prev => [...prev.slice(-3), msg]);
-  }, []);
 
   const syncUserFromSession = useCallback(async (session: any) => {
     if (!session?.user) {
       setUser(null);
       return;
     }
-
     try {
-      addLog("Syncing profile...");
       const [favorites, profileRes] = await Promise.all([
         fetchUserFavorites(session.user.id).catch(() => [] as string[]),
-        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle().catch(() => ({ data: null }))
+        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
       ]);
 
       const profile = profileRes.data;
-
       setUser({
         id: session.user.id,
         email: session.user.email || '',
         role: (profile?.role as 'admin' | 'user') || 'user',
-        interests: profile?.interests || [],
         favorites: favorites || [],
         phone: profile?.phone,
         avatarUrl: profile?.avatar_url
       });
-      addLog("User authenticated.");
     } catch (err) {
       console.error("Profile Sync Error:", err);
-      setUser({
-        id: session.user.id,
-        email: session.user.email || '',
-        role: 'user',
-        favorites: []
-      });
+      setUser({ id: session.user.id, email: session.user.email || '', role: 'user', favorites: [] });
     }
-  }, [addLog]);
+  }, []);
 
   useEffect(() => {
-    addLog("Connecting to Supabase...");
-    
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -149,43 +120,20 @@ const AppContent: React.FC = () => {
         setAuthLoading(false);
       }
     };
-
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       await syncUserFromSession(session);
       if (authLoading) setAuthLoading(false);
-      
-      // Critical Fix: Trigger data refresh when authentication state settles.
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        console.log(`Auth event: ${event}. Refreshing data connection...`);
-        refreshData();
-      }
-      
-      // Reset local admin on sign out
-      if (event === 'SIGNED_OUT') {
-        setIsLocalAdmin(false);
-        setIsAdminMode(false);
-      }
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') refreshData();
     });
-
     return () => subscription.unsubscribe();
-  }, [syncUserFromSession, authLoading, addLog, refreshData]);
-
-  const handleForceWake = async () => {
-    if (isWakingDb) return;
-    setIsWakingDb(true);
-    const status = await getSupabaseStatus(20000);
-    setIsWakingDb(false);
-    if (status.ok) refreshData();
-  };
+  }, [syncUserFromSession, authLoading, refreshData]);
 
   const festivalDays = useMemo(() => {
     const days = new Set<string>();
     events.forEach(e => {
-      try {
-        days.add(format(new Date(e.startTime), 'yyyy-MM-dd'));
-      } catch (err) {}
+      try { days.add(format(new Date(e.startTime), 'yyyy-MM-dd')); } catch (err) {}
     });
     return Array.from(days).sort();
   }, [events]);
@@ -200,14 +148,8 @@ const AppContent: React.FC = () => {
         const matchesVenue = selectedVenue === 'all' || event.venueId === selectedVenue;
         const matchesFavorite = !onlyFavorites || (user?.favorites?.includes(event.id));
         return matchesDay && matchesSearch && matchesCategory && matchesVenue && matchesFavorite;
-      } catch (err) {
-        return false;
-      }
-    }).sort((a,b) => {
-      const timeA = new Date(a.startTime).getTime();
-      const timeB = new Date(b.startTime).getTime();
-      return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
-    });
+      } catch (err) { return false; }
+    }).sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }, [events, search, selectedCategory, selectedVenue, onlyFavorites, user, selectedDay]);
 
   const eventsByDay = useMemo(() => {
@@ -224,43 +166,25 @@ const AppContent: React.FC = () => {
 
   const canAccessAdmin = user?.role === 'admin' || isLocalAdmin;
 
-  const getEventCategory = (event: FestivalEvent) => {
-    return categories.find(c => c.id === event.categoryId) || (({ id: 'unknown', name: 'Other' as any, color: '#64748b' }) as any);
-  };
+  const getEventCategory = (event: FestivalEvent) => categories.find(c => c.id === event.categoryId) || { id: 'unknown', name: 'Other' as any, color: '#64748b' } as Category;
+  const getEventVenue = (event: FestivalEvent) => venues.find(v => v.id === event.venueId) || { id: 'unknown', name: 'Unknown Venue' } as Venue;
+  const getEventPresenters = (event: FestivalEvent) => presenters.filter(p => event.presenterIds?.includes(p.id));
 
-  const getEventVenue = (event: FestivalEvent) => {
-    return venues.find(v => v.id === event.venueId) || { id: 'unknown', name: 'Unknown Venue' } as Venue;
-  };
+  const isDbEmpty = isDbMode && events.length === 0 && presenters.length === 0 && venues.length === 0;
 
-  const getEventPresenters = (event: FestivalEvent) => {
-    return presenters.filter(p => event.presenterIds?.includes(p.id));
-  };
-
-  // Safe loading check
-  const isLoading = (dataLoading || authLoading) && !bypassLoading;
-
-  if (isLoading) {
+  if (dataLoading || authLoading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6 overflow-y-auto">
-        <div className="max-w-md w-full flex flex-col items-center py-10">
-          <LotusLogo className="h-16 w-16 mb-8 animate-pulse" />
-          <Loader2 className="animate-spin text-orange-500 mb-6" size={28} />
-          <h2 className="font-display text-2xl text-slate-900 mb-4 text-center">Waking up the Festival...</h2>
-          <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-[10px] font-mono text-slate-400 uppercase tracking-widest text-left space-y-1 shadow-inner inline-block min-w-[200px]">
-            {logs.map((log, i) => (
-              <div key={i} className="flex gap-2">
-                <Activity size={10} className="mt-0.5 text-orange-400" /> {log}
-              </div>
-            ))}
-          </div>
-          <div className="mt-8 flex gap-3">
-             <button onClick={handleForceWake} className="px-6 py-2 bg-slate-100 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-               <RefreshCcw size={12} className={isWakingDb ? 'animate-spin' : ''} /> Reconnect
-             </button>
-             <button onClick={() => setBypassLoading(true)} className="px-6 py-2 bg-slate-900 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
-               Demo Mode
-             </button>
-          </div>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6">
+        <LotusLogo className="h-16 w-16 mb-8 animate-pulse" />
+        <Loader2 className="animate-spin text-orange-500 mb-6" size={28} />
+        <h2 className="font-display text-2xl text-slate-900 mb-4 text-center">Opening the Festival...</h2>
+        <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-[10px] font-mono text-slate-400 uppercase tracking-widest text-left space-y-2 w-64 shadow-inner">
+           <div className="flex gap-2 text-orange-600"><Activity size={10} className="mt-0.5" /> {statusMessage}</div>
+           <div className="pt-2 border-t border-slate-200">
+              <div className="flex justify-between"><span>Events:</span> <span>{events.length}</span></div>
+              <div className="flex justify-between"><span>Presenters:</span> <span>{presenters.length}</span></div>
+              <div className="flex justify-between"><span>Venues:</span> <span>{venues.length}</span></div>
+           </div>
         </div>
       </div>
     );
@@ -309,33 +233,44 @@ const AppContent: React.FC = () => {
                    categories={categories} venues={venues} onPrint={() => {}}
                  />
 
+                 {isDbEmpty && (
+                    <div className="max-w-7xl mx-auto px-4 mt-6">
+                      <div className="bg-orange-50 border border-orange-200 p-6 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                        <div className="flex items-center gap-4 text-orange-800">
+                          <Database size={32} className="shrink-0" />
+                          <div>
+                            <h3 className="font-bold text-lg">Connected, but no Data</h3>
+                            <p className="text-sm opacity-80 leading-relaxed">Your Supabase project is reachable, but your tables are empty. Head to the Admin Portal to add your content.</p>
+                          </div>
+                        </div>
+                        <button onClick={() => setIsAdminMode(true)} className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg hover:bg-orange-700 transition-all shrink-0">
+                          <ShieldCheck size={18} className="inline mr-2" /> Open Admin Portal
+                        </button>
+                      </div>
+                    </div>
+                 )}
+
                  <div className="bg-white border-b border-slate-100 sticky top-[168px] md:top-[128px] z-10 no-print">
-                   <div className="max-w-7xl mx-auto px-4 overflow-x-auto scrollbar-hide flex items-center justify-between">
-                     <div className="flex items-center gap-2 py-3">
-                       <button onClick={() => setSelectedDay('all')} className={`whitespace-nowrap px-6 py-2 rounded-full text-xs font-bold uppercase transition-all ${selectedDay === 'all' ? 'bg-orange-600 text-white' : 'bg-slate-50 text-slate-500'}`}>All Days</button>
-                       {festivalDays.map(day => (
-                         <button key={day} onClick={() => setSelectedDay(day)} className={`whitespace-nowrap px-6 py-2 rounded-full text-xs font-bold uppercase transition-all ${selectedDay === day ? 'bg-orange-600 text-white' : 'bg-slate-50 text-slate-500'}`}>{format(new Date(day), 'EEE, MMM d')}</button>
-                       ))}
-                     </div>
+                   <div className="max-w-7xl mx-auto px-4 overflow-x-auto flex items-center gap-2 py-3">
+                     <button onClick={() => setSelectedDay('all')} className={`whitespace-nowrap px-6 py-2 rounded-full text-xs font-bold uppercase transition-all ${selectedDay === 'all' ? 'bg-orange-600 text-white shadow-lg' : 'bg-slate-50 text-slate-500'}`}>All Days</button>
+                     {festivalDays.map(day => (
+                       <button key={day} onClick={() => setSelectedDay(day)} className={`whitespace-nowrap px-6 py-2 rounded-full text-xs font-bold uppercase transition-all ${selectedDay === day ? 'bg-orange-600 text-white shadow-lg' : 'bg-slate-50 text-slate-500'}`}>{format(new Date(day), 'EEE, MMM d')}</button>
+                     ))}
                    </div>
                  </div>
 
                  <div className="max-w-7xl mx-auto px-4 py-8">
                    {filteredEvents.length === 0 ? (
-                      <div className="py-20 text-center">
-                        <Calendar size={32} className="mx-auto text-slate-200 mb-4" />
+                      <div className="py-20 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                        <Calendar size={48} className="mx-auto text-slate-200 mb-4" />
                         <h3 className="text-xl font-bold text-slate-900">No sessions match</h3>
-                        <p className="text-slate-400 text-sm mt-1">Try adjusting your filters.</p>
+                        <p className="text-slate-400 text-sm mt-1 max-w-xs mx-auto">Check that your event dates match the selected filters.</p>
                       </div>
                    ) : (
                      <div className="space-y-12">
-                        {(Object.entries(eventsByDay) as [string, FestivalEvent[]][]).map(([dayLabel, dayEvents]) => (
+                        {Object.entries(eventsByDay).map(([dayLabel, dayEvents]) => (
                           <section key={dayLabel} className="space-y-6">
-                            <div className="flex items-center gap-4 sticky top-[230px] md:top-[190px] z-10 bg-slate-50/95 backdrop-blur-sm py-2">
-                              <div className="bg-orange-100 text-orange-600 p-2 rounded-xl"><Clock size={20} /></div>
-                              <h2 className="text-2xl font-display text-slate-900">{dayLabel}</h2>
-                              <div className="flex-1 border-b border-slate-200"></div>
-                            </div>
+                            <h2 className="text-2xl font-display text-slate-900 border-l-4 border-orange-500 pl-4">{dayLabel}</h2>
                             <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}`}>
                               {dayEvents.map(event => (
                                 <EventCard 
@@ -372,23 +307,8 @@ const AppContent: React.FC = () => {
 
       {!isAdminMode && <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
-      {showSettingsModal && user && (
-        <SettingsModal 
-          user={user} 
-          onClose={() => setShowSettingsModal(false)} 
-          onUpdate={setUser}
-        />
-      )}
-      
-      {selectedEventId && (
-        <EventModal 
-          event={events.find(e => e.id === selectedEventId)!}
-          category={getEventCategory(events.find(e => e.id === selectedEventId)!)}
-          venue={getEventVenue(events.find(e => e.id === selectedEventId)!)}
-          presenters={getEventPresenters(events.find(e => e.id === selectedEventId)!)}
-          onClose={() => setSelectedEventId(null)} onPresenterClick={setSelectedPresenterId}
-        />
-      )}
+      {showSettingsModal && user && <SettingsModal user={user} onClose={() => setShowSettingsModal(false)} onUpdate={setUser} />}
+      {selectedEventId && <EventModal event={events.find(e => e.id === selectedEventId)!} category={getEventCategory(events.find(e => e.id === selectedEventId)!)} venue={getEventVenue(events.find(e => e.id === selectedEventId)!)} presenters={getEventPresenters(events.find(e => e.id === selectedEventId)!)} onClose={() => setSelectedEventId(null)} onPresenterClick={setSelectedPresenterId} />}
       {selectedPresenterId && <PresenterModal presenter={presenters.find(p => p.id === selectedPresenterId)!} onClose={() => setSelectedPresenterId(null)} />}
     </div>
   );

@@ -1,7 +1,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { FestivalEvent, Category, Venue, Presenter } from '../types';
-import { supabase, fetchFullEvents, isSupabaseConfigured, getSupabaseStatus } from '../services/supabase';
+import { supabase, isSupabaseConfigured, getSupabaseStatus, fetchFestivalData } from '../services/supabase';
 
 export const useFestivalData = () => {
   const [loading, setLoading] = useState(true);
@@ -10,60 +10,42 @@ export const useFestivalData = () => {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [presenters, setPresenterData] = useState<Presenter[]>([]);
   const [isDbMode, setIsDbMode] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('Initializing...');
 
   const refreshData = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
       setLoading(false);
-      setIsDbMode(false);
       return;
     }
 
     try {
-      // First, check connection status with a timeout race
-      const statusPromise = getSupabaseStatus(15000); // 15s timeout
-      const status = await statusPromise;
+      setStatusMessage('Connecting...');
+      const status = await getSupabaseStatus();
       setIsDbMode(status.ok);
 
       if (status.ok) {
-        // Fetch all data in parallel
-        const [eventsData, catsRes, vnsRes, presRes] = await Promise.allSettled([
-          fetchFullEvents(),
-          supabase.from('categories').select('*'),
-          supabase.from('venues').select('*'),
-          supabase.from('presenters').select('*')
-        ]);
-
-        if (eventsData.status === 'fulfilled') {
-          setEvents(eventsData.value || []);
-        }
+        setStatusMessage('Syncing data...');
+        const data = await fetchFestivalData();
         
-        if (catsRes.status === 'fulfilled' && !catsRes.value.error) {
-          setCategories(catsRes.value.data || []);
-        }
+        setEvents(data.events);
+        setCategories(data.categories);
+        setVenues(data.venues);
+        setPresenterData(data.presenters);
         
-        if (vnsRes.status === 'fulfilled' && !vnsRes.value.error) {
-          setVenues(vnsRes.value.data || []);
-        }
-        
-        if (presRes.status === 'fulfilled' && !presRes.value.error) {
-          setPresenterData(presRes.value.data || []);
-        }
+        setStatusMessage('Sync complete');
       } else {
-        // Clear data if disconnected to prevent inconsistent rendering
-        setEvents([]);
-        setCategories([]);
-        setVenues([]);
-        setPresenterData([]);
+        setStatusMessage(`Connection failed: ${status.message}`);
       }
-    } catch (err) {
-      console.error("Festival Data Refresh Error:", err);
+    } catch (err: any) {
+      console.error("App Sync Failed:", err);
+      setStatusMessage(`Error: ${err.message}`);
     } finally {
-      setLoading(false);
+      // Small delay to let UI see the "Complete" message
+      setTimeout(() => setLoading(false), 500);
     }
   }, []);
 
   const onAddEvent = async (event: Partial<FestivalEvent>) => {
-    if (!supabase) return;
     const { data: newEvent, error } = await supabase.from('events').insert([{
       title: event.title, description: event.description,
       start_time: event.startTime, end_time: event.endTime,
@@ -77,7 +59,6 @@ export const useFestivalData = () => {
   };
 
   const onUpdateEvent = async (event: FestivalEvent) => {
-    if (!supabase) return;
     const { error } = await supabase.from('events').update({
       title: event.title, description: event.description,
       start_time: event.startTime, end_time: event.endTime,
@@ -92,14 +73,11 @@ export const useFestivalData = () => {
   };
 
   const onDeleteEvent = async (id: string) => {
-    if (supabase) {
-      await supabase.from('events').delete().eq('id', id);
-      await refreshData();
-    }
+    await supabase.from('events').delete().eq('id', id);
+    await refreshData();
   };
 
   const onSavePresenter = async (p: Partial<Presenter>) => {
-    if (!supabase) return;
     const { id, ...payload } = p;
     const res = id ? await supabase.from('presenters').update(payload).eq('id', id) : await supabase.from('presenters').insert([payload]);
     if (res.error) throw res.error;
@@ -107,14 +85,11 @@ export const useFestivalData = () => {
   };
 
   const onDeletePresenter = async (id: string) => {
-    if (supabase) {
-      await supabase.from('presenters').delete().eq('id', id);
-      await refreshData();
-    }
+    await supabase.from('presenters').delete().eq('id', id);
+    await refreshData();
   };
 
   const onSaveVenue = async (v: Partial<Venue>) => {
-    if (!supabase) return;
     const { id, ...payload } = v;
     const res = id ? await supabase.from('venues').update(payload).eq('id', id) : await supabase.from('venues').insert([payload]);
     if (res.error) throw res.error;
@@ -122,10 +97,8 @@ export const useFestivalData = () => {
   };
 
   const onDeleteVenue = async (id: string) => {
-    if (supabase) {
-      await supabase.from('venues').delete().eq('id', id);
-      await refreshData();
-    }
+    await supabase.from('venues').delete().eq('id', id);
+    await refreshData();
   };
 
   useEffect(() => {
@@ -133,7 +106,7 @@ export const useFestivalData = () => {
   }, [refreshData]);
 
   return {
-    loading, events, categories, venues, presenters, isDbMode,
+    loading, events, categories, venues, presenters, isDbMode, statusMessage,
     refreshData, onAddEvent, onUpdateEvent, onDeleteEvent, 
     onSavePresenter, onDeletePresenter, onSaveVenue, onDeleteVenue
   };
