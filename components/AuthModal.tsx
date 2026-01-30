@@ -57,7 +57,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
       console.error("Auth error:", err);
       
       if (err.message?.includes("missing OAuth secret") || err.msg?.includes("missing OAuth secret")) {
-        setError("Supabase Configuration Error: You haven't entered the 'Client Secret' in your Supabase Dashboard under Auth > Providers > Google.");
+        setError("Supabase Configuration Error: You haven't entered the 'Client Secret' in your Supabase Dashboard under Auth &gt; Providers &gt; Google.");
         setIsConfigError(true);
       } else if (err.message?.includes("Unsupported provider") || err.code === "validation_failed") {
         setError("Google authentication is currently being configured. Please use Email/Password for now.");
@@ -129,7 +129,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
 
                 <ol className="text-[11px] text-orange-800 space-y-1.5 list-decimal ml-4">
                   <li>Open <strong>Supabase Dashboard</strong>.</li>
-                  <li>Go to <strong>Authentication > URL Configuration</strong>.</li>
+                  <li>Go to <strong>Authentication &gt; URL Configuration</strong>.</li>
                   <li>Update <strong>Site URL</strong> to the URL above.</li>
                   <li>Add the URL above to <strong>Redirect URLs</strong>.</li>
                 </ol>

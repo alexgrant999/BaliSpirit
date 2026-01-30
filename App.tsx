@@ -203,7 +203,7 @@ const App: React.FC = () => {
                   <div className="mt-1"><CheckCircle2 size={16} className="text-green-500" /></div>
                   <div>
                     <p className="text-[11px] font-bold text-slate-700 uppercase">Redirect URLs</p>
-                    <p className="text-[10px] text-slate-500 leading-tight">Add your local URL (e.g. <code className="bg-slate-200 px-1 rounded text-[9px]">http://localhost:5000</code>) to Supabase Auth > Redirect URLs.</p>
+                    <p className="text-[10px] text-slate-500 leading-tight">Add your local URL (e.g. <code className="bg-slate-200 px-1 rounded text-[9px]">http://localhost:5000</code>) to Supabase Auth &gt; Redirect URLs.</p>
                   </div>
                 </div>
               </div>
