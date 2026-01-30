@@ -14,7 +14,7 @@ import { MobileNav } from './components/MobileNav';
 import { LotusLogo } from './components/LotusLogo';
 import { AuthModal } from './components/AuthModal';
 import { InterestPicker } from './components/InterestPicker';
-import { Loader2, Calendar, Database, Clock, Sparkles, AlertTriangle, ChevronRight, RefreshCcw, Activity } from 'lucide-react';
+import { Loader2, Calendar, Database, Clock, Sparkles, AlertTriangle, ChevronRight, RefreshCcw, Activity, Server, FileCode, CheckCircle2 } from 'lucide-react';
 import { useFestivalData } from './hooks/useFestivalData';
 import { isSupabaseConfigured, supabase, signOut, fetchUserFavorites, toggleFavoriteInDb, getSupabaseStatus } from './services/supabase';
 import { format } from 'date-fns';
@@ -32,7 +32,6 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [bypassLoading, setBypassLoading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showInterestPicker, setShowInterestPicker] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isOrganizerAuthorized, setIsOrganizerAuthorized] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
@@ -45,18 +44,17 @@ const App: React.FC = () => {
   const [selectedPresenterId, setSelectedPresenterId] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | 'all'>('all');
   
-  // Real-time diagnostics
-  const [logs, setLogs] = useState<string[]>(['Application Bootstrap...']);
+  const [logs, setLogs] = useState<string[]>(['System Startup...']);
   const [diagResult, setDiagResult] = useState<string | null>(null);
   const [isWakingDb, setIsWakingDb] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
-  const addLog = (msg: string) => setLogs(prev => [...prev.slice(-4), msg]);
+  const addLog = (msg: string) => setLogs(prev => [...prev.slice(-3), msg]);
 
-  // Sync user from session
   const syncUserFromSession = useCallback(async (session: any) => {
     try {
       if (session?.user) {
-        addLog("Retrieving user profile...");
+        addLog("Syncing profile...");
         const favorites = await fetchUserFavorites(session.user.id);
         const { data: profile } = await supabase.from('profiles').select('role, interests').eq('id', session.user.id).maybeSingle();
         setUser({
@@ -66,7 +64,7 @@ const App: React.FC = () => {
           interests: profile?.interests || [],
           favorites
         });
-        addLog("Authentication session secured.");
+        addLog("User authenticated.");
       } else {
         setUser(null);
       }
@@ -75,14 +73,13 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Initialization lifecycle
   useEffect(() => {
-    addLog("Searching for Bali Spirit DB...");
+    addLog("Connecting to Supabase...");
     
     supabase.auth.getSession().then(({ data: { session } }) => {
       syncUserFromSession(session).finally(() => {
         setAuthLoading(false);
-        addLog("Ready to connect.");
+        addLog("Components ready.");
       });
     });
 
@@ -93,11 +90,18 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [syncUserFromSession]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (dataLoading) setShowSetupGuide(true);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [dataLoading]);
+
   const handleForceWake = async () => {
     if (isWakingDb) return;
     setIsWakingDb(true);
-    setDiagResult("Sending wake-up signal (HTTP PROBE)...");
-    const status = await getSupabaseStatus(25000);
+    setDiagResult("Pinging database cluster...");
+    const status = await getSupabaseStatus(20000);
     setDiagResult(`${status.ok ? '✅' : '❌'} ${status.message}`);
     setIsWakingDb(false);
     if (status.ok) refreshData();
@@ -133,45 +137,78 @@ const App: React.FC = () => {
 
   if ((dataLoading || authLoading) && !bypassLoading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6 text-center animate-in fade-in duration-700">
-        <LotusLogo className="h-20 w-20 mb-10 animate-bounce" />
-        <Loader2 className="animate-spin text-orange-500 mb-8" size={32} />
-        
-        <div className="space-y-4 mb-16 max-w-sm w-full">
-          <h2 className="font-display text-3xl text-slate-900 tracking-tight">Syncing with Bali...</h2>
-          <div className="bg-slate-50 border border-slate-100 p-5 rounded-3xl text-[10px] font-mono text-slate-400 uppercase tracking-widest text-left space-y-2 shadow-inner">
-            {logs.map((log, i) => (
-              <div key={i} className="flex gap-2">
-                <Activity size={10} className="mt-0.5 text-orange-400" /> {log}
-              </div>
-            ))}
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6 overflow-y-auto">
+        <div className="max-w-md w-full flex flex-col items-center py-10">
+          <LotusLogo className="h-16 w-16 mb-8 animate-pulse" />
+          <Loader2 className="animate-spin text-orange-500 mb-6" size={28} />
+          
+          <div className="text-center mb-10">
+            <h2 className="font-display text-2xl text-slate-900 mb-4">Waking up the Festival...</h2>
+            <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-[10px] font-mono text-slate-400 uppercase tracking-widest text-left space-y-1 shadow-inner inline-block min-w-[200px]">
+              {logs.map((log, i) => (
+                <div key={i} className="flex gap-2">
+                  <Activity size={10} className="mt-0.5 text-orange-400" /> {log}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="max-w-xs w-full space-y-4">
-          {diagResult && (
-            <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 text-[10px] font-bold text-orange-700 uppercase text-left leading-relaxed animate-in slide-in-from-top-2">
-              <AlertTriangle size={14} className="inline mr-2 mb-1" />
-              {diagResult}
+          <div className="w-full space-y-4 mb-8">
+            {diagResult && (
+              <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 text-[10px] font-bold text-orange-700 uppercase text-left leading-relaxed">
+                <AlertTriangle size={14} className="inline mr-2 mb-1" />
+                {diagResult}
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 gap-3">
+              <button 
+                onClick={handleForceWake}
+                disabled={isWakingDb}
+                className="w-full flex items-center justify-center gap-2 py-4 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-orange-200 hover:text-orange-600 transition-all shadow-sm"
+              >
+                {isWakingDb ? <RefreshCcw size={14} className="animate-spin" /> : <Database size={14} />}
+                {isWakingDb ? 'Pinging...' : 'Force Reconnect'}
+              </button>
+              <button 
+                onClick={() => setBypassLoading(true)}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-100 hover:bg-black transition-all"
+              >
+                Enter Demo Mode <ChevronRight size={14} className="inline ml-1" />
+              </button>
+            </div>
+          </div>
+
+          {showSetupGuide && (
+            <div className="w-full p-6 bg-slate-50 rounded-[2rem] border border-slate-100 text-left animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                <Server size={14} /> Local Setup Checklist
+              </h3>
+              <div className="space-y-4">
+                <div className="flex gap-3">
+                  <div className="mt-1"><Server size={16} className="text-orange-500" /></div>
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-700 uppercase">Don't open via file explorer</p>
+                    <p className="text-[10px] text-slate-500 leading-tight">Browser modules require a local server. Use VS Code's "Live Server" or run <code className="bg-slate-200 px-1 rounded text-[9px]">npx serve .</code> in your terminal.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="mt-1"><FileCode size={16} className="text-blue-500" /></div>
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-700 uppercase">Run the SQL Schema</p>
+                    <p className="text-[10px] text-slate-500 leading-tight">Paste the contents of <code className="bg-slate-200 px-1 rounded text-[9px]">schema.sql</code> into your Supabase SQL Editor and click "Run".</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="mt-1"><CheckCircle2 size={16} className="text-green-500" /></div>
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-700 uppercase">Redirect URLs</p>
+                    <p className="text-[10px] text-slate-500 leading-tight">Add your local URL (e.g. <code className="bg-slate-200 px-1 rounded text-[9px]">http://localhost:5000</code>) to Supabase Auth > Redirect URLs.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
-          
-          <div className="flex flex-col gap-3">
-            <button 
-              onClick={handleForceWake}
-              disabled={isWakingDb}
-              className="w-full flex items-center justify-center gap-2 py-4 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-orange-200 hover:text-orange-600 transition-all disabled:opacity-50"
-            >
-              {isWakingDb ? <RefreshCcw size={14} className="animate-spin" /> : <Database size={14} />}
-              {isWakingDb ? 'Pinging Cloud...' : 'Wake Up Database'}
-            </button>
-            <button 
-              onClick={() => setBypassLoading(true)}
-              className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-100 hover:bg-black active:scale-95 transition-all"
-            >
-              Enter Local Mode <ChevronRight size={14} className="inline ml-1" />
-            </button>
-          </div>
         </div>
       </div>
     );

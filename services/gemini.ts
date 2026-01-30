@@ -3,13 +3,25 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { FestivalEvent } from "../types";
 
 /**
+ * Safely checks for the API key without crashing if 'process' is undefined
+ */
+const getApiKey = () => {
+  try {
+    return process.env.API_KEY;
+  } catch (e) {
+    return null;
+  }
+};
+
+/**
  * Summarizes the event description using Gemini.
  */
 export const getEventSummary = async (event: FestivalEvent): Promise<string> => {
-  if (!process.env.API_KEY) return event.description;
+  const apiKey = getApiKey();
+  if (!apiKey) return event.description;
   
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Summarize this festival workshop in 2 punchy sentences for a mobile app: ${event.title} - ${event.description}`,
@@ -28,10 +40,11 @@ export const getEventSummary = async (event: FestivalEvent): Promise<string> => 
  * Gets smart recommendations based on user interests using Gemini.
  */
 export const getSmartRecommendations = async (userInterests: string[], allEvents: FestivalEvent[]): Promise<string[]> => {
-  if (!process.env.API_KEY) return [];
+  const apiKey = getApiKey();
+  if (!apiKey) return [];
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Based on user interests [${userInterests.join(', ')}], return a JSON array of event IDs that they would likely enjoy from this list: ${JSON.stringify(allEvents.map(e => ({id: e.id, title: e.title, tags: e.tags})))}`,
