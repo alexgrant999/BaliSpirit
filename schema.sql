@@ -1,17 +1,30 @@
 
--- Bali Spirit Festival Database Schema (Optimized for App-Level Auth)
+-- BALI SPIRIT FESTIVAL - MASTER RESET SCRIPT
+-- RUN THIS IN THE SUPABASE SQL EDITOR
 
--- 1. Create Tables
+-- 0. EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 1. CLEANUP (Optional: Uncomment if you want a TOTAL wipe)
+-- DROP TABLE IF EXISTS user_favorites CASCADE;
+-- DROP TABLE IF EXISTS profiles CASCADE;
+-- DROP TABLE IF EXISTS event_presenters CASCADE;
+-- DROP TABLE IF EXISTS events CASCADE;
+-- DROP TABLE IF EXISTS presenters CASCADE;
+-- DROP TABLE IF EXISTS venues CASCADE;
+-- DROP TABLE IF EXISTS categories CASCADE;
+
+-- 2. TABLES
 CREATE TABLE IF NOT EXISTS categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
   color TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS venues (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
   description TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -45,7 +58,6 @@ CREATE TABLE IF NOT EXISTS event_presenters (
   PRIMARY KEY (event_id, presenter_id)
 );
 
--- 2. Auth & Profiles
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
@@ -61,7 +73,7 @@ CREATE TABLE IF NOT EXISTS user_favorites (
   PRIMARY KEY (user_id, event_id)
 );
 
--- 3. Enable RLS on Tables
+-- 3. SECURITY (RLS)
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE venues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE presenters ENABLE ROW LEVEL SECURITY;
@@ -70,32 +82,57 @@ ALTER TABLE event_presenters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_favorites ENABLE ROW LEVEL SECURITY;
 
--- 4. Policies
--- Public read access for festival content
-CREATE POLICY "Public Read Categories" ON categories FOR SELECT USING (true);
-CREATE POLICY "Public Read Venues" ON venues FOR SELECT USING (true);
-CREATE POLICY "Public Read Presenters" ON presenters FOR SELECT USING (true);
-CREATE POLICY "Public Read Events" ON events FOR SELECT USING (true);
-CREATE POLICY "Public Read Event Presenters" ON event_presenters FOR SELECT USING (true);
+-- 4. POLICIES (Corrected Idempotent Loop)
+DO $$ 
+DECLARE
+    pol record;
+BEGIN
+    -- Drop all existing policies on our public tables to start fresh
+    FOR pol IN (
+        SELECT policyname, tablename 
+        FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename IN ('categories', 'venues', 'presenters', 'events', 'event_presenters', 'profiles', 'user_favorites')
+    ) 
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
+    END LOOP;
 
--- Admin write access
-CREATE POLICY "Admin All Categories" ON categories FOR ALL USING (true);
-CREATE POLICY "Admin All Venues" ON venues FOR ALL USING (true);
-CREATE POLICY "Admin All Presenters" ON presenters FOR ALL USING (true);
-CREATE POLICY "Admin All Events" ON events FOR ALL USING (true);
-CREATE POLICY "Admin All Event Presenters" ON event_presenters FOR ALL USING (true);
+    -- Categories
+    CREATE POLICY "Public Read Categories" ON categories FOR SELECT USING (true);
+    CREATE POLICY "Admin All Categories" ON categories FOR ALL USING (true);
 
--- Profile & Favorites Policies
-CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Users can manage own favorites" ON user_favorites FOR ALL USING (auth.uid() = user_id);
+    -- Venues
+    CREATE POLICY "Public Read Venues" ON venues FOR SELECT USING (true);
+    CREATE POLICY "Admin All Venues" ON venues FOR ALL USING (true);
 
--- 5. Profile trigger for new users
+    -- Presenters
+    CREATE POLICY "Public Read Presenters" ON presenters FOR SELECT USING (true);
+    CREATE POLICY "Admin All Presenters" ON presenters FOR ALL USING (true);
+
+    -- Events
+    CREATE POLICY "Public Read Events" ON events FOR SELECT USING (true);
+    CREATE POLICY "Admin All Events" ON events FOR ALL USING (true);
+
+    -- Event Presenters
+    CREATE POLICY "Public Read Event Presenters" ON event_presenters FOR SELECT USING (true);
+    CREATE POLICY "Admin All Event Presenters" ON event_presenters FOR ALL USING (true);
+
+    -- Profiles
+    CREATE POLICY "Users view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+    CREATE POLICY "Admin view all profiles" ON profiles FOR SELECT USING (true);
+
+    -- Favorites
+    CREATE POLICY "Users manage favorites" ON user_favorites FOR ALL USING (auth.uid() = user_id);
+END $$;
+
+-- 5. TRIGGERS
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, role, interests)
-  VALUES (new.id, new.email, 'user', '{}');
+  INSERT INTO public.profiles (id, email, role)
+  VALUES (new.id, new.email, 'user')
+  ON CONFLICT (id) DO NOTHING;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
