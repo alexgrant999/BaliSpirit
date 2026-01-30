@@ -1,12 +1,11 @@
 
-import React, { useState, useMemo, useEffect, useCallback, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, ErrorInfo, ReactNode } from 'react';
 import { User, ViewMode, FestivalEvent, Category, Venue, Presenter } from './types';
 import { Filters } from './components/Filters';
 import { EventCard } from './components/EventCard';
 import { EventModal } from './components/EventModal';
 import { PresenterModal } from './components/PresenterModal';
 import { AdminPanel } from './components/AdminPanel';
-import { AdminAuth } from './components/AdminAuth';
 import { PresentersView } from './components/PresentersView';
 import { VenuesView } from './components/VenuesView';
 import { Header } from './components/Header';
@@ -14,7 +13,7 @@ import { MobileNav } from './components/MobileNav';
 import { LotusLogo } from './components/LotusLogo';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
-import { Loader2, Calendar, Database, Clock, Sparkles, AlertTriangle, ChevronRight, RefreshCcw, Activity, Server, FileCode, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Loader2, Calendar, Database, Clock, Sparkles, AlertTriangle, ChevronRight, RefreshCcw, Activity, Server, FileCode, CheckCircle2, RotateCcw, ShieldAlert } from 'lucide-react';
 import { useFestivalData } from './hooks/useFestivalData';
 import { isSupabaseConfigured, supabase, signOut, fetchUserFavorites, toggleFavoriteInDb, getSupabaseStatus } from './services/supabase';
 import { format } from 'date-fns';
@@ -28,13 +27,9 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Fixed ErrorBoundary to explicitly use React.Component and handle props/state for TypeScript
+// Fixed ErrorBoundary class by explicitly using React.Component to resolve 'props' type issue
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Use constructor to ensure TypeScript recognizes the properties and state initialization
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+  state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -86,7 +81,6 @@ const AppContent: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [isOrganizerAuthorized, setIsOrganizerAuthorized] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -98,9 +92,7 @@ const AppContent: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<string | 'all'>('all');
   
   const [logs, setLogs] = useState<string[]>(['System Startup...']);
-  const [diagResult, setDiagResult] = useState<string | null>(null);
   const [isWakingDb, setIsWakingDb] = useState(false);
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   const addLog = (msg: string) => setLogs(prev => [...prev.slice(-3), msg]);
 
@@ -114,10 +106,10 @@ const AppContent: React.FC = () => {
       addLog("Syncing profile...");
       const [favorites, profileRes] = await Promise.all([
         fetchUserFavorites(session.user.id).catch(() => [] as string[]),
-        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle().catch(() => ({ data: null }))
+        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
       ]);
 
-      const profile = profileRes.data;
+      const profile = profileRes?.data;
 
       setUser({
         id: session.user.id,
@@ -163,19 +155,10 @@ const AppContent: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [syncUserFromSession]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (dataLoading) setShowSetupGuide(true);
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [dataLoading]);
-
   const handleForceWake = async () => {
     if (isWakingDb) return;
     setIsWakingDb(true);
-    setDiagResult("Pinging database cluster...");
     const status = await getSupabaseStatus(20000);
-    setDiagResult(`${status.ok ? '✅' : '❌'} ${status.message}`);
     setIsWakingDb(false);
     if (status.ok) refreshData();
   };
@@ -222,7 +205,7 @@ const AppContent: React.FC = () => {
     return groups;
   }, [filteredEvents]);
 
-  const showAdminPanel = isAdminMode && (user?.role === 'admin' || isOrganizerAuthorized);
+  const canAccessAdmin = user?.role === 'admin';
 
   const getEventCategory = (event: FestivalEvent) => {
     return categories.find(c => c.id === event.categoryId) || (({ id: 'unknown', name: 'Other' as any, color: '#64748b' }) as any);
@@ -242,42 +225,21 @@ const AppContent: React.FC = () => {
         <div className="max-w-md w-full flex flex-col items-center py-10">
           <LotusLogo className="h-16 w-16 mb-8 animate-pulse" />
           <Loader2 className="animate-spin text-orange-500 mb-6" size={28} />
-          
-          <div className="text-center mb-10">
-            <h2 className="font-display text-2xl text-slate-900 mb-4">Waking up the Festival...</h2>
-            <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-[10px] font-mono text-slate-400 uppercase tracking-widest text-left space-y-1 shadow-inner inline-block min-w-[200px]">
-              {logs.map((log, i) => (
-                <div key={i} className="flex gap-2">
-                  <Activity size={10} className="mt-0.5 text-orange-400" /> {log}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="w-full space-y-4 mb-8">
-            {diagResult && (
-              <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 text-[10px] font-bold text-orange-700 uppercase text-left leading-relaxed">
-                <AlertTriangle size={14} className="inline mr-2 mb-1" />
-                {diagResult}
+          <h2 className="font-display text-2xl text-slate-900 mb-4 text-center">Waking up the Festival...</h2>
+          <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-[10px] font-mono text-slate-400 uppercase tracking-widest text-left space-y-1 shadow-inner inline-block min-w-[200px]">
+            {logs.map((log, i) => (
+              <div key={i} className="flex gap-2">
+                <Activity size={10} className="mt-0.5 text-orange-400" /> {log}
               </div>
-            )}
-            
-            <div className="grid grid-cols-1 gap-3">
-              <button 
-                onClick={handleForceWake}
-                disabled={isWakingDb}
-                className="w-full flex items-center justify-center gap-2 py-4 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-orange-200 hover:text-orange-600 transition-all shadow-sm"
-              >
-                {isWakingDb ? <RefreshCcw size={14} className="animate-spin" /> : <Database size={14} />}
-                {isWakingDb ? 'Pinging...' : 'Force Reconnect'}
-              </button>
-              <button 
-                onClick={() => setBypassLoading(true)}
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-100 hover:bg-black transition-all"
-              >
-                Enter Demo Mode <ChevronRight size={14} className="inline ml-1" />
-              </button>
-            </div>
+            ))}
+          </div>
+          <div className="mt-8 flex gap-3">
+             <button onClick={handleForceWake} className="px-6 py-2 bg-slate-100 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+               <RefreshCcw size={12} className={isWakingDb ? 'animate-spin' : ''} /> Reconnect
+             </button>
+             <button onClick={() => setBypassLoading(true)} className="px-6 py-2 bg-slate-900 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
+               Demo Mode
+             </button>
           </div>
         </div>
       </div>
@@ -288,7 +250,11 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen flex flex-col">
       <Header 
         activeTab={activeTab} isAdminMode={isAdminMode} user={user}
-        onTabChange={setActiveTab} onAdminToggle={() => setIsAdminMode(!isAdminMode)}
+        onTabChange={setActiveTab} 
+        onAdminToggle={() => {
+          if (!user) setShowAuthModal(true);
+          else setIsAdminMode(!isAdminMode);
+        }}
         onHomeClick={() => {setActiveTab('schedule'); setIsAdminMode(false);}}
         onAuthClick={() => setShowAuthModal(true)} 
         onSignOut={() => signOut().then(() => setUser(null))}
@@ -297,7 +263,7 @@ const AppContent: React.FC = () => {
 
       <main className="flex-1 bg-slate-50 pb-20 md:pb-8">
         {isAdminMode ? (
-          showAdminPanel ? (
+          canAccessAdmin ? (
             <AdminPanel 
               events={events} categories={categories} venues={venues} presenters={presenters}
               onAddEvent={onAddEvent} onUpdateEvent={onUpdateEvent} onDeleteEvent={onDeleteEvent}
@@ -305,7 +271,24 @@ const AppContent: React.FC = () => {
               onSaveVenue={onSaveVenue} onDeleteVenue={onDeleteVenue}
               isLive={isSupabaseConfigured} isDbMode={isDbMode} onRefresh={refreshData}
             />
-          ) : <AdminAuth onAuthorized={() => setIsOrganizerAuthorized(true)} />
+          ) : (
+            <div className="max-w-md mx-auto mt-20 p-10 bg-white rounded-[2.5rem] border border-slate-200 text-center shadow-xl animate-in zoom-in-95 duration-300">
+              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert size={40} />
+              </div>
+              <h2 className="text-2xl font-display text-slate-900 mb-2">Privileged Access Required</h2>
+              <p className="text-slate-500 text-sm mb-8 leading-relaxed">
+                Your account ({user?.email}) does not have administrative privileges for the Bali Spirit Festival. 
+                Please contact the coordinator to elevate your role.
+              </p>
+              <button 
+                onClick={() => setIsAdminMode(false)}
+                className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-black transition-all"
+              >
+                Return to Public View
+              </button>
+            </div>
+          )
         ) : (
           <>
             {activeTab === 'presenters' ? <PresentersView presenters={presenters} onPresenterClick={setSelectedPresenterId} /> : 
