@@ -9,6 +9,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { AdminAuth } from './components/AdminAuth';
 import { PresentersView } from './components/PresentersView';
 import { VenuesView } from './components/VenuesView';
+import { MyScheduleView } from './components/MyScheduleView';
 import { Header } from './components/Header';
 import { MobileNav } from './components/MobileNav';
 import { LotusLogo } from './components/LotusLogo';
@@ -71,6 +72,7 @@ const AppContent: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showMySchedule, setShowMySchedule] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isLocalAdmin, setIsLocalAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
@@ -255,17 +257,21 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header 
+      <Header
         activeTab={activeTab} isAdminMode={isAdminMode} user={user}
-        onTabChange={setActiveTab} 
+        onTabChange={(tab) => { setActiveTab(tab); setShowMySchedule(false); }}
         onAdminToggle={() => {
           if (!user) setShowAuthModal(true);
           else setIsAdminMode(!isAdminMode);
         }}
-        onHomeClick={() => {setActiveTab('schedule'); setIsAdminMode(false);}}
-        onAuthClick={() => setShowAuthModal(true)} 
+        onHomeClick={() => {setActiveTab('schedule'); setIsAdminMode(false); setShowMySchedule(false);}}
+        onAuthClick={() => setShowAuthModal(true)}
         onSignOut={() => signOut().then(() => setUser(null))}
         onSettingsClick={() => setShowSettingsModal(true)}
+        onMyScheduleClick={() => {
+          if (!user) setShowAuthModal(true);
+          else { setShowMySchedule(true); setIsAdminMode(false); }
+        }}
       />
 
       <main className="flex-1 bg-slate-50 pb-20 md:pb-8">
@@ -281,9 +287,25 @@ const AppContent: React.FC = () => {
           ) : (
             <AdminAuth onAuthorized={() => setIsLocalAdmin(true)} />
           )
+        ) : showMySchedule ? (
+          <MyScheduleView
+            events={events}
+            categories={categories}
+            venues={venues}
+            presenters={presenters}
+            favorites={user?.favorites || []}
+            onToggleFavorite={(id) => {
+              if (!user) return;
+              const isFav = user.favorites.includes(id);
+              const next = isFav ? user.favorites.filter(fid => fid !== id) : [...user.favorites, id];
+              setUser({ ...user, favorites: next });
+              toggleFavoriteInDb(user.id, id, isFav, user.email);
+            }}
+            onEventClick={(event) => setSelectedEventId(event.id)}
+          />
         ) : (
           <>
-            {activeTab === 'presenters' ? <PresentersView presenters={presenters} onPresenterClick={setSelectedPresenterId} /> : 
+            {activeTab === 'presenters' ? <PresentersView presenters={presenters} onPresenterClick={setSelectedPresenterId} /> :
              activeTab === 'venues' ? <VenuesView venues={venues} onViewSchedule={(id) => {setSelectedVenue(id); setActiveTab('schedule');}} /> :
              (
                <>

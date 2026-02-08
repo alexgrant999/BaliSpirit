@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Layout, Shield, User as UserIcon, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { Layout, Shield, User as UserIcon, LogOut, ChevronDown, Settings, Heart } from 'lucide-react';
 import { LotusLogo } from './LotusLogo';
 import { User } from '../types';
 
@@ -14,6 +14,7 @@ interface HeaderProps {
   onAuthClick: () => void;
   onSignOut: () => void;
   onSettingsClick: () => void;
+  onMyScheduleClick: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,7 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
   onHomeClick,
   onAuthClick,
   onSignOut,
-  onSettingsClick
+  onSettingsClick,
+  onMyScheduleClick
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
@@ -102,6 +104,12 @@ export const Header: React.FC<HeaderProps> = ({
                       <p className="text-sm font-bold text-slate-900 truncate">{user.email}</p>
                     </div>
                     <div className="p-2">
+                      <button
+                        onClick={() => { onMyScheduleClick(); setShowProfileMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        <Heart size={16} /> My Schedule
+                      </button>
                       <button
                         onClick={() => { onSettingsClick(); setShowProfileMenu(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
