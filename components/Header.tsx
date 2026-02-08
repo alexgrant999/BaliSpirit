@@ -60,20 +60,22 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         <div className="flex items-center gap-4">
-          <div className="hidden lg:flex items-center bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
-            <button 
-              onClick={() => isAdminMode && onAdminToggle()}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${!isAdminMode ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <Layout size={12} /> Public
-            </button>
-            <button 
-              onClick={() => !isAdminMode && onAdminToggle()}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${isAdminMode ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <Shield size={12} /> Admin
-            </button>
-          </div>
+          {user?.role === 'admin' && (
+            <div className="hidden lg:flex items-center bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
+              <button
+                onClick={() => isAdminMode && onAdminToggle()}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${!isAdminMode ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Layout size={12} /> Public
+              </button>
+              <button
+                onClick={() => !isAdminMode && onAdminToggle()}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${isAdminMode ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Shield size={12} /> Admin
+              </button>
+            </div>
+          )}
 
           {user ? (
             <div className="relative">
@@ -100,19 +102,21 @@ export const Header: React.FC<HeaderProps> = ({
                       <p className="text-sm font-bold text-slate-900 truncate">{user.email}</p>
                     </div>
                     <div className="p-2">
-                      <button 
+                      <button
                         onClick={() => { onSettingsClick(); setShowProfileMenu(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
                       >
                         <Settings size={16} /> My Account
                       </button>
-                      <button 
-                        onClick={() => { onAdminToggle(); setShowProfileMenu(false); }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                      >
-                        <Shield size={16} /> Admin Portal
-                      </button>
-                      <button 
+                      {user.role === 'admin' && (
+                        <button
+                          onClick={() => { onAdminToggle(); setShowProfileMenu(false); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                        >
+                          <Shield size={16} /> Admin Portal
+                        </button>
+                      )}
+                      <button
                         onClick={() => { onSignOut(); setShowProfileMenu(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 transition-colors"
                       >

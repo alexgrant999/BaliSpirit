@@ -15,11 +15,9 @@ if (!rootElement) {
 } else {
   try {
     const root = ReactDOM.createRoot(rootElement);
-    root.render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    );
+    // StrictMode disabled - causes AbortErrors with Supabase auth locks
+    // See: https://github.com/supabase/auth-js/issues/873
+    root.render(<App />);
   } catch (err) {
     console.error("Failed to render React application:", err);
     // The error will be caught by the window listener in index.html and displayed

@@ -17,23 +17,38 @@ export const supabase = createClient(URL, KEY, {
 
 export const getSupabaseStatus = async () => {
   try {
+    console.log('🔍 Checking Supabase connection...');
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('Current auth user:', user?.id, user?.email);
+
     const { data, error } = await supabase.from('categories').select('id').limit(1);
     if (error) {
-      console.error("Connection Check Failed:", error.message);
+      console.error("❌ Connection Check Failed:", error);
       return { ok: false, message: error.message };
     }
+    console.log('✅ Connection check passed');
     return { ok: true, message: 'Connected' };
   } catch (e: any) {
+    // AbortErrors are expected during concurrent auth operations - treat as success
+    if (e.name === 'AbortError') {
+      console.log('⚠️ Connection check aborted (concurrent auth), treating as OK');
+      return { ok: true, message: 'Connected (skipped check)' };
+    }
+    console.error("❌ Connection check exception:", e);
     return { ok: false, message: e.message };
   }
 };
 
 /**
  * Fetches all core festival data in a single sync operation
+ * Automatically retries on AbortError with delay
  */
-export const fetchFestivalData = async () => {
+export const fetchFestivalData = async (retryCount = 0): Promise<any> => {
   console.group("🚀 Supabase Sync Diagnostics");
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log("Fetching data as user:", user?.id || 'anonymous');
+
     const [eventsRes, catsRes, vnsRes, presRes, epRes] = await Promise.all([
       supabase.from('events').select('*').order('start_time'),
       supabase.from('categories').select('*').order('name'),
@@ -42,12 +57,19 @@ export const fetchFestivalData = async () => {
       supabase.from('event_presenters').select('*')
     ]);
 
+    // Log errors if any
+    if (catsRes.error) console.error("Categories error:", catsRes.error);
+    if (vnsRes.error) console.error("Venues error:", vnsRes.error);
+    if (presRes.error) console.error("Presenters error:", presRes.error);
+    if (eventsRes.error) console.error("Events error:", eventsRes.error);
+    if (epRes.error) console.error("Event presenters error:", epRes.error);
+
     // Log individual table health
     console.log("Categories found:", catsRes.data?.length || 0);
     console.log("Venues found:", vnsRes.data?.length || 0);
     console.log("Presenters found:", presRes.data?.length || 0);
     console.log("Events found:", eventsRes.data?.length || 0);
-    
+
     if (presRes.data && presRes.data.length > 0) {
       console.log("Sample Presenter from DB:", presRes.data[0]);
     }
@@ -74,11 +96,63 @@ export const fetchFestivalData = async () => {
       venues: vnsRes.data || [],
       presenters: presRes.data || []
     };
-  } catch (err) {
-    console.error("Critical Sync Error:", err);
+  } catch (err: any) {
     console.groupEnd();
+
+    // Retry on AbortError with exponential backoff (max 2 retries)
+    if (err.name === 'AbortError' && retryCount < 2) {
+      const delayMs = (retryCount + 1) * 300; // 300ms, 600ms
+      console.log(`⚠️ Data fetch aborted, retrying in ${delayMs}ms (attempt ${retryCount + 1}/2)...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      return fetchFestivalData(retryCount + 1);
+    }
+
+    console.error("Critical Sync Error:", err);
     throw err;
   }
+};
+
+/**
+ * Ensures the current user has a profile in the database
+ * Call this after authentication to handle cases where the trigger didn't fire
+ */
+export const ensureProfile = async (userId: string, userEmail: string) => {
+  console.log('🔐 ensureProfile called for:', userId, userEmail);
+
+  // Create timeout promise
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Profile check timeout')), 3000)
+  );
+
+  const profilePromise = async () => {
+    console.log('➕ Attempting to ensure profile exists (insert with conflict handling)...');
+    const { error: insertError } = await supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        email: userEmail || '',
+        role: 'user'
+      });
+
+    // Check if error is something other than unique constraint violation
+    if (insertError && insertError.code !== '23505') {
+      console.error('❌ Failed to ensure profile:', insertError);
+    } else {
+      console.log('✅ Profile ensured (created or already exists)');
+    }
+  };
+
+  try {
+    // Race between profile operation and timeout
+    await Promise.race([profilePromise(), timeoutPromise]);
+  } catch (err: any) {
+    if (err.message === 'Profile check timeout') {
+      console.log('⏱️ Profile check timed out (likely already exists), continuing...');
+    } else {
+      console.error('❌ Unexpected error in ensureProfile:', err);
+    }
+  }
+  console.log('🔐 ensureProfile completed');
 };
 
 export const signInWithGoogle = async () => {
@@ -93,7 +167,13 @@ export const signOut = async () => {
 };
 
 export const fetchUserFavorites = async (userId: string): Promise<string[]> => {
-  const { data } = await supabase.from('user_favorites').select('event_id').eq('user_id', userId);
+  console.log('⭐ Fetching favorites for user:', userId);
+  const { data, error } = await supabase.from('user_favorites').select('event_id').eq('user_id', userId);
+  if (error) {
+    console.error('❌ Error fetching favorites:', error);
+    throw error;
+  }
+  console.log('✅ Favorites fetched:', data?.length || 0);
   return data?.map(f => f.event_id) || [];
 };
 

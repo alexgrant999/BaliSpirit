@@ -84,50 +84,113 @@ const AppContent: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<string | 'all'>('all');
 
   const syncUserFromSession = useCallback(async (session: any) => {
+    console.log('🔄 syncUserFromSession called', session ? 'with session' : 'no session');
+
     if (!session?.user) {
+      console.log('No session user, setting user to null');
       setUser(null);
       return;
     }
-    try {
-      const [favorites, profileRes] = await Promise.all([
-        fetchUserFavorites(session.user.id).catch(() => [] as string[]),
-        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
-      ]);
 
-      const profile = profileRes.data;
-      setUser({
+    try {
+      console.log('Syncing user:', session.user.id, session.user.email);
+
+      // Set basic user state immediately to avoid blocking on database queries
+      const userState = {
         id: session.user.id,
         email: session.user.email || '',
-        role: (profile?.role as 'admin' | 'user') || 'user',
-        favorites: favorites || [],
-        phone: profile?.phone,
-        avatarUrl: profile?.avatar_url
-      });
+        role: 'user' as 'admin' | 'user',
+        favorites: []
+      };
+
+      console.log('✅ Setting initial user state:', userState);
+      setUser(userState);
+
+      // Fetch profile details in the background (non-blocking)
+      setTimeout(async () => {
+        try {
+          const [favorites, profileRes] = await Promise.all([
+            fetchUserFavorites(session.user.id).catch(() => []),
+            supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
+          ]);
+
+          console.log('Profile query result:', profileRes);
+          const profile = profileRes.data;
+
+          // Update user state with full profile details
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            role: (profile?.role as 'admin' | 'user') || 'user',
+            favorites: favorites || [],
+            phone: profile?.phone,
+            avatarUrl: profile?.avatar_url
+          });
+          console.log('✅ Updated user state with profile details');
+        } catch (err) {
+          console.error('Failed to fetch profile details:', err);
+        }
+      }, 500); // Delay to let auth settle
+
     } catch (err) {
-      console.error("Profile Sync Error:", err);
-      setUser({ id: session.user.id, email: session.user.email || '', role: 'user', favorites: [] });
+      console.error("User Sync Error:", err);
+      // Set a minimal user state so the user at least appears logged in
+      const fallbackUser = {
+        id: session.user.id,
+        email: session.user.email || '',
+        role: 'user' as const,
+        favorites: []
+      };
+      console.log('⚠️ Using fallback user state:', fallbackUser);
+      setUser(fallbackUser);
     }
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        await syncUserFromSession(session);
-      } catch (err) {
-        console.error(err);
+        if (mounted) {
+          await syncUserFromSession(session);
+        }
+      } catch (err: any) {
+        // Ignore AbortErrors from React StrictMode double-mounting
+        if (err.name === 'AbortError') {
+          console.log('Auth initialization aborted (React StrictMode), ignoring...');
+        } else if (mounted) {
+          console.error('Auth initialization error:', err);
+        }
       } finally {
-        setAuthLoading(false);
+        if (mounted) {
+          setAuthLoading(false);
+        }
       }
     };
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      await syncUserFromSession(session);
-      if (authLoading) setAuthLoading(false);
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') refreshData();
+      console.log('Auth state changed:', event);
+      if (!mounted) return;
+
+      try {
+        await syncUserFromSession(session);
+        if (authLoading && mounted) setAuthLoading(false);
+        if ((event === 'SIGNED_IN' || event === 'SIGNED_OUT') && mounted) refreshData();
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.log('Auth state change aborted, ignoring...');
+        } else if (mounted) {
+          console.error('Auth state change error:', err);
+        }
+      }
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [syncUserFromSession, authLoading, refreshData]);
 
   const festivalDays = useMemo(() => {
@@ -233,7 +296,7 @@ const AppContent: React.FC = () => {
                    categories={categories} venues={venues} onPrint={() => {}}
                  />
 
-                 {isDbEmpty && (
+                 {isDbEmpty && canAccessAdmin && (
                     <div className="max-w-7xl mx-auto px-4 mt-6">
                       <div className="bg-orange-50 border border-orange-200 p-6 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
                         <div className="flex items-center gap-4 text-orange-800">

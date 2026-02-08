@@ -13,35 +13,63 @@ export const useFestivalData = () => {
   const [statusMessage, setStatusMessage] = useState('Initializing...');
 
   const refreshData = useCallback(async () => {
+    console.log('🔄 refreshData called');
+
     if (!isSupabaseConfigured || !supabase) {
+      console.log('Supabase not configured');
       setLoading(false);
       return;
     }
 
     try {
       setStatusMessage('Connecting...');
-      const status = await getSupabaseStatus();
+      console.log('Getting Supabase status...');
+
+      const status = await getSupabaseStatus().catch(err => {
+        // If status check fails with AbortError, try to continue anyway
+        if (err.name === 'AbortError') {
+          console.log('Status check aborted, will try to fetch data anyway');
+          return { ok: true, message: 'Continuing...' };
+        }
+        throw err;
+      });
+
+      console.log('Status:', status);
       setIsDbMode(status.ok);
 
       if (status.ok) {
         setStatusMessage('Syncing data...');
+        console.log('Fetching festival data...');
+
+        // fetchFestivalData now handles AbortError retries internally
         const data = await fetchFestivalData();
-        
+
+        console.log('Data fetched:', {
+          events: data.events.length,
+          categories: data.categories.length,
+          venues: data.venues.length,
+          presenters: data.presenters.length
+        });
+
         setEvents(data.events);
         setCategories(data.categories);
         setVenues(data.venues);
         setPresenterData(data.presenters);
-        
+
         setStatusMessage('Sync complete');
       } else {
         setStatusMessage(`Connection failed: ${status.message}`);
       }
     } catch (err: any) {
-      console.error("App Sync Failed:", err);
-      setStatusMessage(`Error: ${err.message}`);
+      console.error("❌ App Sync Failed:", err);
+      setStatusMessage(`Error: ${err.message || 'Unknown error'}`);
+      setIsDbMode(false);
     } finally {
       // Small delay to let UI see the "Complete" message
-      setTimeout(() => setLoading(false), 500);
+      setTimeout(() => {
+        console.log('Setting loading to false');
+        setLoading(false);
+      }, 500);
     }
   }, []);
 
@@ -102,7 +130,18 @@ export const useFestivalData = () => {
   };
 
   useEffect(() => {
-    refreshData();
+    let mounted = true;
+
+    const loadData = async () => {
+      if (!mounted) return;
+      await refreshData();
+    };
+
+    loadData();
+
+    return () => {
+      mounted = false;
+    };
   }, [refreshData]);
 
   return {

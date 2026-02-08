@@ -90,22 +90,69 @@ BEGIN
         EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
     END LOOP;
 
-    CREATE POLICY "Public Read Categories" ON categories FOR SELECT USING (true);
-    CREATE POLICY "Admin All Categories" ON categories FOR ALL USING (true);
+    -- Categories: public read, admin write
+    CREATE POLICY "Anyone can read categories" ON categories FOR SELECT USING (true);
+    CREATE POLICY "Admins can modify categories" ON categories FOR INSERT WITH CHECK (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can update categories" ON categories FOR UPDATE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can delete categories" ON categories FOR DELETE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
 
-    CREATE POLICY "Public Read Venues" ON venues FOR SELECT USING (true);
-    CREATE POLICY "Admin All Venues" ON venues FOR ALL USING (true);
+    -- Venues: public read, admin write
+    CREATE POLICY "Anyone can read venues" ON venues FOR SELECT USING (true);
+    CREATE POLICY "Admins can modify venues" ON venues FOR INSERT WITH CHECK (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can update venues" ON venues FOR UPDATE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can delete venues" ON venues FOR DELETE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
 
-    CREATE POLICY "Public Read Presenters" ON presenters FOR SELECT USING (true);
-    CREATE POLICY "Admin All Presenters" ON presenters FOR ALL USING (true);
+    -- Presenters: public read, admin write
+    CREATE POLICY "Anyone can read presenters" ON presenters FOR SELECT USING (true);
+    CREATE POLICY "Admins can modify presenters" ON presenters FOR INSERT WITH CHECK (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can update presenters" ON presenters FOR UPDATE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can delete presenters" ON presenters FOR DELETE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
 
-    CREATE POLICY "Public Read Events" ON events FOR SELECT USING (true);
-    CREATE POLICY "Admin All Events" ON events FOR ALL USING (true);
+    -- Events: public read, admin write
+    CREATE POLICY "Anyone can read events" ON events FOR SELECT USING (true);
+    CREATE POLICY "Admins can modify events" ON events FOR INSERT WITH CHECK (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can update events" ON events FOR UPDATE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can delete events" ON events FOR DELETE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
 
-    CREATE POLICY "Public Read Event Presenters" ON event_presenters FOR SELECT USING (true);
-    CREATE POLICY "Admin All Event Presenters" ON event_presenters FOR ALL USING (true);
+    -- Event Presenters: public read, admin write
+    CREATE POLICY "Anyone can read event_presenters" ON event_presenters FOR SELECT USING (true);
+    CREATE POLICY "Admins can modify event_presenters" ON event_presenters FOR INSERT WITH CHECK (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can update event_presenters" ON event_presenters FOR UPDATE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+    CREATE POLICY "Admins can delete event_presenters" ON event_presenters FOR DELETE USING (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
 
+    -- Profiles: users can view/update own, insert own as fallback
     CREATE POLICY "Users view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+    CREATE POLICY "Users insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
     CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
     CREATE POLICY "Admin view all profiles" ON profiles FOR SELECT USING (
       EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
