@@ -114,7 +114,7 @@ serve(async (req) => {
         <div style="max-width: 600px; margin: 0 auto; background: white;">
           <!-- Header -->
           <div style="background: linear-gradient(135deg, #ea580c 0%, #f97316 100%); padding: 40px 30px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.5px;">🪷 Bali Spirit Festival</h1>
+            <img src="https://www.balispiritfestival.com/wp-content/uploads/2025/11/BSF25-Logo-with-flower1.png" alt="Bali Spirit Festival" style="max-width: 200px; height: auto; margin: 0 auto 15px auto; display: block;">
             <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">Saved to Your Favorites</p>
           </div>
 
