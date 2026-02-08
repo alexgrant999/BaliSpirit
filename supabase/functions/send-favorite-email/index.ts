@@ -12,7 +12,38 @@ interface EmailRequest {
 
 serve(async (req) => {
   try {
-    const { userId, eventId, userEmail }: EmailRequest = await req.json()
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST',
+          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        }
+      })
+    }
+
+    // Parse request body
+    let body
+    try {
+      const text = await req.text()
+      body = text ? JSON.parse(text) : {}
+    } catch (parseError) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON body' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { userId, eventId, userEmail }: EmailRequest = body
+
+    // Validate required fields
+    if (!userId || !eventId || !userEmail) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: userId, eventId, userEmail' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -176,14 +207,25 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, emailId: result.id }),
-      { headers: { 'Content-Type': 'application/json' } }
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      }
     )
 
   } catch (error) {
     console.error('Error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      }
     )
   }
 })

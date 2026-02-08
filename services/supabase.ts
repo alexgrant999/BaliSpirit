@@ -177,11 +177,29 @@ export const fetchUserFavorites = async (userId: string): Promise<string[]> => {
   return data?.map(f => f.event_id) || [];
 };
 
-export const toggleFavoriteInDb = async (userId: string, eventId: string, isCurrentlyFavorite: boolean) => {
+export const toggleFavoriteInDb = async (userId: string, eventId: string, isCurrentlyFavorite: boolean, userEmail?: string) => {
   if (isCurrentlyFavorite) {
     await supabase.from('user_favorites').delete().eq('user_id', userId).eq('event_id', eventId);
   } else {
     await supabase.from('user_favorites').insert({ user_id: userId, event_id: eventId });
+
+    // Send favorite notification email
+    if (userEmail) {
+      try {
+        const { data, error } = await supabase.functions.invoke('send-favorite-email', {
+          body: { userId, eventId, userEmail }
+        });
+
+        if (error) {
+          console.error('Failed to send favorite email:', error);
+        } else {
+          console.log('✅ Favorite email sent:', data);
+        }
+      } catch (err) {
+        console.error('Error sending favorite email:', err);
+        // Don't throw - email failure shouldn't break favoriting
+      }
+    }
   }
 };
 

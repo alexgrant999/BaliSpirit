@@ -349,7 +349,7 @@ const AppContent: React.FC = () => {
                                       const isFav = user.favorites.includes(id);
                                       const next = isFav ? user.favorites.filter(fid => fid !== id) : [...user.favorites, id];
                                       setUser({ ...user, favorites: next });
-                                      toggleFavoriteInDb(user.id, id, isFav);
+                                      toggleFavoriteInDb(user.id, id, isFav, user.email);
                                     }
                                   }} 
                                   onClick={(e) => setSelectedEventId(e.id)}
